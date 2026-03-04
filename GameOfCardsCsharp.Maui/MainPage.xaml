@@ -1,0 +1,223 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="GameOfCardsCsharp.Maui.MainPage"
+             BackgroundColor="#2D5016">
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto" Padding="10">
+        
+        <!-- Top Section: Opponent's Area -->
+        <Border Grid.Row="0" 
+                BackgroundColor="#1A3010" 
+                Stroke="#4A7029"
+                StrokeThickness="2"
+                Padding="10"
+                Margin="5">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="Opponent" 
+                       FontSize="18" 
+                       FontAttributes="Bold"
+                       TextColor="White"
+                       HorizontalOptions="Center"/>
+                
+                <!-- Opponent's Hand (cards shown face down) -->
+                <CollectionView x:Name="OpponentHandCollection" 
+                               HeightRequest="120"
+                                SelectionMode="None">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Horizontal" 
+                                         ItemSpacing="5"/>
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border BackgroundColor="#0D47A1"
+                                    Stroke="#1976D2"
+                                    StrokeThickness="2"
+                                    WidthRequest="85"
+                                    HeightRequest="100"
+                                    Margin="2">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8"/>
+                                </Border.StrokeShape>
+                                <Label Text="🂠" 
+                                       FontSize="44"
+                                       LineBreakMode="NoWrap"
+                                       TextColor="White"
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center"/>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- Middle Section: Play Area -->
+        <Border Grid.Row="1" 
+                BackgroundColor="#1A3010" 
+                Stroke="#4A7029"
+                StrokeThickness="2"
+                Padding="15"
+                Margin="5">
+            <HorizontalStackLayout Spacing="40" 
+                                  VerticalOptions="Center"
+                                  HorizontalOptions="Start">
+                
+                <!-- Left Section: Game Info -->
+                <VerticalStackLayout Spacing="20" 
+                                    VerticalOptions="Center">
+                    
+                    <Label Text="Game of Cards" 
+                           FontSize="28" 
+                           FontAttributes="Bold"
+                           TextColor="White"
+                           HorizontalOptions="Start"/>
+                    
+                    <Label x:Name="GameStatusLabel" 
+                           Text="Press 'New Game' to start" 
+                           FontSize="18"
+                           TextColor="#FFD700"
+                           HorizontalOptions="Start"/>
+
+                    <!-- Score Display -->
+                    <VerticalStackLayout Spacing="10" Margin="0,20,0,0">
+                        <Label x:Name="OpponentScoreLabel" 
+                               Text="Opponent: 0" 
+                               FontSize="20"
+                               FontAttributes="Bold"
+                               TextColor="White"
+                               HorizontalOptions="Start"/>
+                        <Label x:Name="PlayerScoreLabel" 
+                               Text="You: 0" 
+                               FontSize="20"
+                               FontAttributes="Bold"
+                               TextColor="White"
+                               HorizontalOptions="Start"/>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+
+                <!-- Right Section: Cards in Play (Horizontal) -->
+                <HorizontalStackLayout Spacing="15" 
+                                      VerticalOptions="Center">
+                    
+                    <!-- Opponent's played card -->
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="Opponent's Card" 
+                               FontSize="12" 
+                               TextColor="#B0BEC5"
+                               HorizontalOptions="Center"/>
+                        <Border x:Name="OpponentCardBorder"
+                                BackgroundColor="White"
+                                Stroke="#757575"
+                                StrokeThickness="3"
+                                WidthRequest="110"
+                                HeightRequest="130"
+                                HorizontalOptions="Center"
+                                IsVisible="False">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="10"/>
+                            </Border.StrokeShape>
+                            <Label x:Name="OpponentCardLabel" 
+                                   FontSize="56"
+                                   LineBreakMode="NoWrap"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="Center"/>
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <!-- Player's played card -->
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="Your Card" 
+                               FontSize="12" 
+                               TextColor="#B0BEC5"
+                               HorizontalOptions="Center"/>
+                        <Border x:Name="PlayerCardBorder"
+                                BackgroundColor="White"
+                                Stroke="#757575"
+                                StrokeThickness="3"
+                                WidthRequest="110"
+                                HeightRequest="130"
+                                HorizontalOptions="Center"
+                                IsVisible="False">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="10"/>
+                            </Border.StrokeShape>
+                            <Label x:Name="PlayerCardLabel" 
+                                   FontSize="56"
+                                   LineBreakMode="NoWrap"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="Center"/>
+                        </Border>
+                    </VerticalStackLayout>
+                </HorizontalStackLayout>
+            </HorizontalStackLayout>
+        </Border>
+
+        <!-- Bottom Section: Player's Hand -->
+        <Border Grid.Row="2" 
+                BackgroundColor="#1A3010" 
+                Stroke="#4A7029"
+                StrokeThickness="2"
+                Padding="10"
+                Margin="5">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="Your Hand" 
+                       FontSize="18" 
+                       FontAttributes="Bold"
+                       TextColor="White"
+                       HorizontalOptions="Center"/>
+                
+                <!-- Player's Hand (cards shown face up) -->
+                <CollectionView x:Name="PlayerHandCollection" 
+                                HeightRequest="120"
+                                SelectionMode="None">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Horizontal" 
+                                         ItemSpacing="5"/>
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border BackgroundColor="White"
+                                    Stroke="#757575"
+                                    StrokeThickness="2"
+                                    WidthRequest="85"
+                                    HeightRequest="100"
+                                    Margin="2">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnCardTapped"/>
+                                </Border.GestureRecognizers>
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8"/>
+                                </Border.StrokeShape>
+                                <Label Text="{Binding DisplayText}" 
+                                       FontSize="44"
+                                       LineBreakMode="NoWrap"
+                                       InputTransparent="True"
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center"
+                                       HorizontalTextAlignment="Center"/>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- Control Buttons -->
+        <HorizontalStackLayout Grid.Row="3" 
+                              Spacing="10" 
+                              HorizontalOptions="Center"
+                              Margin="5">
+            <Button x:Name="NewGameButton"
+                    Text="New Game" 
+                    Clicked="OnNewGameClicked"
+                    BackgroundColor="#4CAF50"
+                    TextColor="White"
+                    WidthRequest="120"
+                    HeightRequest="50"/>
+        </HorizontalStackLayout>
+    </Grid>
+
+</ContentPage>
