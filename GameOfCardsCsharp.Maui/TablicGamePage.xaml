@@ -262,7 +262,7 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Game Status Panel (NEW - Moved from game board) -->
+                <!-- Game Status Panel -->
                 <Border BackgroundColor="#4A7029" 
                         Stroke="#6A9039"
                         StrokeThickness="2"
@@ -410,34 +410,128 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Move History Panel -->
+                <!-- NEW: Player Pile Viewer (Expandable) -->
                 <Border BackgroundColor="#1A3010" 
                         Stroke="#4A7029"
                         StrokeThickness="2"
-                        Padding="15"
-                        MinimumHeightRequest="200">
+                        Padding="15">
                     <Border.StrokeShape>
                         <RoundRectangle CornerRadius="10"/>
                     </Border.StrokeShape>
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="📜 Move History" 
-                               FontSize="16" 
-                               FontAttributes="Bold"
-                               TextColor="White"
-                               HorizontalOptions="Center"/>
-                        
-                        <BoxView HeightRequest="1" Color="#4A7029" Margin="0,5"/>
-
-                        <ScrollView MaximumHeightRequest="300">
-                            <VerticalStackLayout x:Name="MoveHistoryStack" 
-                                               Spacing="5">
-                                <Label Text="No moves yet" 
+                    <VerticalStackLayout Spacing="8">
+                        <!-- Expandable Header -->
+                        <Border BackgroundColor="#2D5016"
+                                Padding="10"
+                                Stroke="#4A7029"
+                                StrokeThickness="1">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="5"/>
+                            </Border.StrokeShape>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnPlayerPileHeaderTapped"/>
+                            </Border.GestureRecognizers>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <HorizontalStackLayout Grid.Column="0" Spacing="5">
+                                    <Label Text="🃏" 
+                                           FontSize="18"
+                                           TextColor="#87CEEB"
+                                           VerticalOptions="Center"/>
+                                    <Label Text="View My Pile" 
+                                           FontSize="14" 
+                                           FontAttributes="Bold"
+                                           TextColor="White"
+                                           VerticalOptions="Center"/>
+                                </HorizontalStackLayout>
+                                <Label x:Name="PlayerPileExpandIcon"
+                                       Grid.Column="1"
+                                       Text="▼" 
                                        FontSize="12"
-                                       TextColor="#808080"
-                                       HorizontalOptions="Center"
-                                       Margin="0,20,0,0"/>
-                            </VerticalStackLayout>
-                        </ScrollView>
+                                       TextColor="#90EE90"
+                                       VerticalOptions="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Expandable Content -->
+                        <VerticalStackLayout x:Name="PlayerPileContent"
+                                           IsVisible="False"
+                                           Spacing="5">
+                            <BoxView HeightRequest="1" Color="#4A7029" Margin="0,5"/>
+                            
+                            <!-- Pile Cards Display -->
+                            <FlexLayout x:Name="PlayerPileCardsLayout"
+                                      Wrap="Wrap"
+                                      JustifyContent="Start"
+                                      AlignItems="Start"
+                                      Direction="Row">
+                                <!-- Cards will be added dynamically -->
+                            </FlexLayout>
+                            
+                            <!-- Empty state -->
+                            <Label x:Name="PlayerPileEmptyLabel"
+                                   Text="No cards captured yet" 
+                                   FontSize="12"
+                                   TextColor="#808080"
+                                   HorizontalOptions="Center"
+                                   Margin="0,10,0,10"/>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Move History Panel (NOW EXPANDABLE) -->
+                <Border BackgroundColor="#1A3010" 
+                        Stroke="#4A7029"
+                        StrokeThickness="2"
+                        Padding="15">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="10"/>
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="8">
+                        <!-- Expandable Header -->
+                        <Border BackgroundColor="#2D5016"
+                                Padding="10"
+                                Stroke="#4A7029"
+                                StrokeThickness="1">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="5"/>
+                            </Border.StrokeShape>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMoveHistoryHeaderTapped"/>
+                            </Border.GestureRecognizers>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <HorizontalStackLayout Grid.Column="0" Spacing="5">
+                                    <Label Text="📜" FontSize="16"/>
+                                    <Label Text="Move History" 
+                                           FontSize="14" 
+                                           FontAttributes="Bold"
+                                           TextColor="White"
+                                           VerticalOptions="Center"/>
+                                </HorizontalStackLayout>
+                                <Label x:Name="MoveHistoryExpandIcon"
+                                       Grid.Column="1"
+                                       Text="▼" 
+                                       FontSize="12"
+                                       TextColor="#90EE90"
+                                       VerticalOptions="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Expandable Content -->
+                        <VerticalStackLayout x:Name="MoveHistoryContent"
+                                           IsVisible="False"
+                                           Spacing="5">
+                            <BoxView HeightRequest="1" Color="#4A7029" Margin="0,5"/>
+
+                            <ScrollView MaximumHeightRequest="300">
+                                <VerticalStackLayout x:Name="MoveHistoryStack" 
+                                                   Spacing="5">
+                                    <Label Text="No moves yet" 
+                                           FontSize="12"
+                                           TextColor="#808080"
+                                           HorizontalOptions="Center"
+                                           Margin="0,20,0,0"/>
+                                </VerticalStackLayout>
+                            </ScrollView>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
 

@@ -360,7 +360,7 @@ namespace GameOfCardsCsharp
         public bool NeedsNewRound() =>
             state.GetPhase() == GamePhase.InProgress &&
             IsRoundComplete() &&
-            state.GetCurrentRound() <= 4;
+            state.GetCurrentRound() < 4;
 
         public bool IsWaitingForMove() => waitingForPlayerMove;
 
