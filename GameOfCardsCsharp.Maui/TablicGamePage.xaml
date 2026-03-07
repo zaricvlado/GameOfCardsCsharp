@@ -477,7 +477,7 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Move History Panel (NOW EXPANDABLE) -->
+                <!-- Move History Panel (existing) -->
                 <Border BackgroundColor="#1A3010" 
                         Stroke="#4A7029"
                         StrokeThickness="2"
@@ -532,6 +532,115 @@
                                 </VerticalStackLayout>
                             </ScrollView>
                         </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- NEW: Debug Panel (ADD THIS AT THE BOTTOM) -->
+                <Border BackgroundColor="#1A1A2E" 
+                        Stroke="#4A4A7A"
+                        StrokeThickness="2"
+                        Padding="15">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="10"/>
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="🐛 Debug &amp; Logging"
+                               FontSize="14" 
+                               FontAttributes="Bold"
+                               TextColor="#FFD700"
+                               HorizontalOptions="Center"/>
+                        
+                        <BoxView HeightRequest="1" Color="#4A4A7A" Margin="0,5"/>
+                        
+                        <!-- Enable/Disable Logging Toggle -->
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,5">
+                            <Label Grid.Column="0"
+                                   Text="Enable Logging" 
+                                   FontSize="12"
+                                   TextColor="White"
+                                   VerticalOptions="Center"/>
+                            <Switch Grid.Column="1"
+                                    x:Name="LoggingEnabledSwitch"
+                                    IsToggled="False"
+                                    Toggled="OnLoggingToggled"
+                                    OnColor="#4CAF50"
+                                    ThumbColor="White"/>
+                        </Grid>
+                        
+                        <!-- Status Label -->
+                        <Label x:Name="LoggingStatusLabel"
+                               Text="❌ Logging Disabled" 
+                               FontSize="10"
+                               TextColor="#FF6B6B"
+                               HorizontalOptions="Center"/>
+                        
+                        <BoxView HeightRequest="1" Color="#3A3A5A" Margin="0,5"/>
+                        
+                        <!-- Log Level Picker -->
+                        <Label Text="Log Level:" 
+                               FontSize="11"
+                               TextColor="White"/>
+                        
+                        <Picker x:Name="LogLevelPicker"
+                                SelectedIndex="0"
+                                SelectedIndexChanged="OnLogLevelChanged"
+                                BackgroundColor="#2A2A4A"
+                                TextColor="White"
+                                FontSize="11">
+                            <Picker.Items>
+                                <x:String>Debug</x:String>
+                                <x:String>Info</x:String>
+                                <x:String>Warning</x:String>
+                                <x:String>Error</x:String>
+                            </Picker.Items>
+                        </Picker>
+                        
+                        <BoxView HeightRequest="1" Color="#3A3A5A" Margin="0,5"/>
+                        
+                        <!-- Current Log File Info -->
+                        <Label Text="Current Log:" 
+                               FontSize="10"
+                               TextColor="#90EE90"/>
+                        
+                        <Label x:Name="LogFilePathLabel"
+                               Text="No log file" 
+                               FontSize="8"
+                               TextColor="#87CEEB"
+                               LineBreakMode="TailTruncation"
+                               MaxLines="2"/>
+                        
+                        <!-- Action Buttons -->
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="5" Margin="0,5,0,0">
+                            <Button Grid.Column="0"
+                                    Text="📂 Folder"
+                                    Clicked="OnOpenLogFolderClicked"
+                                    BackgroundColor="#4A4A7A"
+                                    TextColor="White"
+                                    FontSize="10"
+                                    CornerRadius="5"
+                                    Padding="6"/>
+                            
+                            <Button Grid.Column="1"
+                                    x:Name="ShareLogButton"
+                                    Text="📤 Share"
+                                    Clicked="OnShareLogFileClicked"
+                                    BackgroundColor="#4A4A7A"
+                                    TextColor="White"
+                                    FontSize="10"
+                                    CornerRadius="5"
+                                    Padding="6"
+                                    IsEnabled="False"/>
+                        </Grid>
+                        
+                        <!-- Session Info -->
+                        <BoxView HeightRequest="1" Color="#3A3A5A" Margin="0,5"/>
+                        
+                        <Label x:Name="SessionInfoLabel"
+                               Text="Turn on logging before starting a new game" 
+                               FontSize="9"
+                               TextColor="#87CEEB"
+                               LineBreakMode="WordWrap"
+                               HorizontalTextAlignment="Center"/>
                     </VerticalStackLayout>
                 </Border>
 
