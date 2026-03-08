@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:GameOfCardsCsharp.Maui.Models"
+             x:Class="GameOfCardsCsharp.Maui.TablicGamePageAndroid"
+             Title="Tablic Game"
+             BackgroundColor="#2D5016">
+
+    <!-- Mobile-Optimized Layout with Horizontally Scrollable Top Bar -->
+    <Grid RowDefinitions="Auto,*"
+          Padding="5">
+
+        <!-- TOP: Horizontally Scrollable Status Bar with 4 Sections -->
+        <ScrollView Grid.Row="0"
+                   Orientation="Horizontal"
+                   HeightRequest="200"
+                   HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout Spacing="10" Padding="5">
+                
+                <!-- Section 1: Game Overview (Scores + Status + Icon Controls) -->
+                <Border BackgroundColor="#1A3010" 
+                       Stroke="#4A7029"
+                       StrokeThickness="1"
+                       WidthRequest="340"
+                       Padding="10">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="10"/>
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="8">
+                        <!-- Scores Side-by-Side -->
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <!-- AI Score (Left) -->
+                            <Border Grid.Column="0"
+                                   BackgroundColor="#1A3010" 
+                                   Stroke="#4A7029"
+                                   StrokeThickness="1"
+                                   Padding="6">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8"/>
+                                </Border.StrokeShape>
+                                <VerticalStackLayout Spacing="3">
+                                    <Label Text="🤖 AI" 
+                                           FontSize="11" 
+                                           FontAttributes="Bold"
+                                           TextColor="White"
+                                           HorizontalOptions="Center"/>
+                                    <Label x:Name="OpponentScoreLabel" 
+                                           Text="0" 
+                                           FontSize="18"
+                                           FontAttributes="Bold"
+                                           TextColor="#FFD700"
+                                           HorizontalOptions="Center"/>
+                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="3">
+                                        <Label Grid.Column="0" Text="🃏" FontSize="9" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="1" Text="⭐" FontSize="9" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="2" Text="🎯" FontSize="9" HorizontalOptions="Center"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="3">
+                                        <Label Grid.Column="0" x:Name="OpponentCardsLabel" Text="0" FontSize="11" FontAttributes="Bold" TextColor="White" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="1" x:Name="OpponentTricksLabel" Text="0" FontSize="11" FontAttributes="Bold" TextColor="White" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="2" x:Name="OpponentTalonLabel" Text="0" FontSize="11" FontAttributes="Bold" TextColor="White" HorizontalOptions="Center"/>
+                                    </Grid>
+                                </VerticalStackLayout>
+                            </Border>
+
+                            <!-- Player Score (Right) -->
+                            <Border Grid.Column="1"
+                                   BackgroundColor="#1A3010" 
+                                   Stroke="#4A7029"
+                                   StrokeThickness="1"
+                                   Padding="6">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8"/>
+                                </Border.StrokeShape>
+                                <VerticalStackLayout Spacing="3">
+                                    <Label Text="👤 You" 
+                                           FontSize="11" 
+                                           FontAttributes="Bold"
+                                           TextColor="White"
+                                           HorizontalOptions="Center"/>
+                                    <Label x:Name="PlayerScoreLabel" 
+                                           Text="0" 
+                                           FontSize="18"
+                                           FontAttributes="Bold"
+                                           TextColor="#FFD700"
+                                           HorizontalOptions="Center"/>
+                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="3">
+                                        <Label Grid.Column="0" Text="🃏" FontSize="9" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="1" Text="⭐" FontSize="9" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="2" Text="🎯" FontSize="9" HorizontalOptions="Center"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="3">
+                                        <Label Grid.Column="0" x:Name="PlayerCardsLabel" Text="0" FontSize="11" FontAttributes="Bold" TextColor="White" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="1" x:Name="PlayerTricksLabel" Text="0" FontSize="11" FontAttributes="Bold" TextColor="White" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="2" x:Name="PlayerTalonLabel" Text="0" FontSize="11" FontAttributes="Bold" TextColor="White" HorizontalOptions="Center"/>
+                                    </Grid>
+                                </VerticalStackLayout>
+                            </Border>
+                        </Grid>
+
+                        <!-- Status & Icon Controls (Inline) -->
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="5">
+                            <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                <Label x:Name="RoundInfoLabel" 
+                                       Text="Round 1/4" 
+                                       FontSize="10"
+                                       FontAttributes="Bold"
+                                       TextColor="#FFD700"
+                                       HorizontalOptions="Start"/>
+                                
+                                <Label x:Name="GameStatusLabel" 
+                                       Text="Press 'New Game'" 
+                                       FontSize="9"
+                                       TextColor="White"
+                                       LineBreakMode="WordWrap"
+                                       MaxLines="3"/>
+                            </VerticalStackLayout>
+                            
+                            <!-- Icon-Only Circular Buttons -->
+                            <Button Grid.Column="1"
+                                    x:Name="NewGameButton"
+                                    Text="🎮"
+                                    Clicked="OnNewGameClicked"
+                                    BackgroundColor="#4A7029"
+                                    TextColor="White"
+                                    FontSize="20"
+                                    WidthRequest="50"
+                                    HeightRequest="50"
+                                    CornerRadius="25"
+                                    Padding="0"
+                                    VerticalOptions="Center"/>
+                            
+                            <Button Grid.Column="2"
+                                    x:Name="ShowPossibleMovesButton"
+                                    Text="💡"
+                                    Clicked="OnShowPossibleMovesClicked"
+                                    BackgroundColor="#6A7029"
+                                    TextColor="White"
+                                    FontSize="20"
+                                    WidthRequest="50"
+                                    HeightRequest="50"
+                                    CornerRadius="25"
+                                    Padding="0"
+                                    IsEnabled="False"
+                                    VerticalOptions="Center"/>
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Section 2: Move History (UNCHANGED) -->
+                <Border BackgroundColor="#1A3010" 
+                       Stroke="#4A7029"
+                       StrokeThickness="1"
+                       WidthRequest="340"
+                       Padding="10">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="10"/>
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="📜 Move History" 
+                               FontSize="14" 
+                               FontAttributes="Bold"
+                               TextColor="White"
+                               HorizontalOptions="Center"/>
+                        
+                        <BoxView HeightRequest="1" Color="#4A7029"/>
+                        
+                        <ScrollView>
+                            <VerticalStackLayout x:Name="MoveHistoryStack" 
+                                               Spacing="3">
+                                <Label Text="No moves yet" 
+                                       FontSize="10"
+                                       TextColor="#808080"
+                                       HorizontalOptions="Center"
+                                       Margin="0,20,0,20"/>
+                            </VerticalStackLayout>
+                        </ScrollView>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Section 3: Debug & Logging (UNCHANGED) -->
+                <Border BackgroundColor="#1A1A2E" 
+                       Stroke="#4A4A7A"
+                       StrokeThickness="1"
+                       WidthRequest="340"
+                       Padding="10">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="10"/>
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="🐛 Debug &amp; Logging"
+                               FontSize="14" 
+                               FontAttributes="Bold"
+                               TextColor="#FFD700"
+                               HorizontalOptions="Center"/>
+                        
+                        <BoxView HeightRequest="1" Color="#4A4A7A"/>
+                        
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                            <Label Grid.Column="0"
+                                   Text="Enable Logging" 
+                                   FontSize="11"
+                                   TextColor="White"
+                                   VerticalOptions="Center"/>
+                            <Switch Grid.Column="1"
+                                    x:Name="LoggingEnabledSwitch"
+                                    IsToggled="False"
+                                    Toggled="OnLoggingToggled"
+                                    OnColor="#4CAF50"
+                                    ThumbColor="White"
+                                    Scale="0.85"/>
+                        </Grid>
+                        
+                        <Label x:Name="LoggingStatusLabel"
+                               Text="❌ Logging Disabled" 
+                               FontSize="9"
+                               TextColor="#FF6B6B"
+                               HorizontalOptions="Center"/>
+                        
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="5">
+                            <Label Grid.Column="0"
+                                   Text="Level:" 
+                                   FontSize="10"
+                                   TextColor="White"
+                                   VerticalOptions="Center"/>
+                            <Picker Grid.Column="1"
+                                    x:Name="LogLevelPicker"
+                                    SelectedIndex="0"
+                                    SelectedIndexChanged="OnLogLevelChanged"
+                                    BackgroundColor="#2A2A4A"
+                                    TextColor="White"
+                                    FontSize="10">
+                                <Picker.Items>
+                                    <x:String>Debug</x:String>
+                                    <x:String>Info</x:String>
+                                    <x:String>Warning</x:String>
+                                    <x:String>Error</x:String>
+                                </Picker.Items>
+                            </Picker>
+                        </Grid>
+                        
+                        <Label x:Name="LogFilePathLabel"
+                               Text="No log file" 
+                               FontSize="8"
+                               TextColor="#87CEEB"
+                               LineBreakMode="TailTruncation"
+                               MaxLines="1"/>
+                        
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="5" Margin="0,3">
+                            <Button Grid.Column="0"
+                                    Text="📂 Folder"
+                                    Clicked="OnOpenLogFolderClicked"
+                                    BackgroundColor="#4A4A7A"
+                                    TextColor="White"
+                                    FontSize="10"
+                                    CornerRadius="5"
+                                    HeightRequest="38"
+                                    Padding="0"/>
+                            <Button Grid.Column="1"
+                                    x:Name="ShareLogButton"
+                                    Text="📤 Share"
+                                    Clicked="OnShareLogFileClicked"
+                                    BackgroundColor="#4A4A7A"
+                                    TextColor="White"
+                                    FontSize="10"
+                                    CornerRadius="5"
+                                    HeightRequest="38"
+                                    Padding="0"
+                                    IsEnabled="False"/>
+                        </Grid>
+                        
+                        <Label x:Name="SessionInfoLabel"
+                               Text="Enable logging before starting game" 
+                               FontSize="8"
+                               TextColor="#87CEEB"
+                               LineBreakMode="WordWrap"
+                               HorizontalTextAlignment="Center"/>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Section 4: My Pile (UNCHANGED) -->
+                <Border BackgroundColor="#1A3010" 
+                       Stroke="#4A7029"
+                       StrokeThickness="1"
+                       WidthRequest="340"
+                       Padding="10">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="10"/>
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="6">
+                        <HorizontalStackLayout HorizontalOptions="Center" Spacing="5">
+                            <Label Text="🃏" FontSize="16" TextColor="#87CEEB"/>
+                            <Label Text="My Pile" 
+                                   FontSize="14" 
+                                   FontAttributes="Bold"
+                                   TextColor="White"
+                                   VerticalOptions="Center"/>
+                            <Label x:Name="PlayerPileExpandIcon"
+                                   Text="▼" 
+                                   FontSize="10"
+                                   TextColor="#90EE90"
+                                   VerticalOptions="Center"/>
+                        </HorizontalStackLayout>
+                        
+                        <BoxView HeightRequest="1" Color="#4A7029"/>
+                        
+                        <ScrollView>
+                            <FlexLayout x:Name="PlayerPileCardsLayout"
+                                      Wrap="Wrap"
+                                      JustifyContent="Center"
+                                      AlignItems="Start"
+                                      Direction="Row">
+                            </FlexLayout>
+                        </ScrollView>
+                        
+                        <Label x:Name="PlayerPileEmptyLabel"
+                               Text="No cards captured yet" 
+                               FontSize="10"
+                               TextColor="#808080"
+                               HorizontalOptions="Center"
+                               Margin="0,15,0,15"/>
+                    </VerticalStackLayout>
+                </Border>
+
+            </HorizontalStackLayout>
+        </ScrollView>
+
+        <!-- MIDDLE: Game Board (Cards) - Takes remaining space -->
+        <Grid Grid.Row="1"
+              RowDefinitions="Auto,*,Auto"
+              Padding="3"
+              RowSpacing="3">
+
+            <!-- Top: AI Opponent's Hand -->
+            <Border Grid.Row="0" 
+                    BackgroundColor="#1A3010" 
+                    Stroke="#4A7029"
+                    StrokeThickness="1"
+                    Padding="4">
+                <VerticalStackLayout Spacing="2">
+                    <Label Text="AI Opponent" 
+                           FontSize="12" 
+                           FontAttributes="Bold"
+                           TextColor="White"
+                           HorizontalOptions="Center"/>
+
+                    <CollectionView x:Name="OpponentHandCollection" 
+                                   HeightRequest="70"
+                                   HorizontalOptions="Center"
+                                   SelectionMode="None">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Horizontal" 
+                                             ItemSpacing="3"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BackgroundColor="#0D47A1"
+                                        Stroke="#1976D2"
+                                        StrokeThickness="2"
+                                        WidthRequest="50"
+                                        HeightRequest="65"
+                                        Margin="1">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="6"/>
+                                    </Border.StrokeShape>
+                                    <Label Text="{Binding DisplayText}" 
+                                           FontSize="24"
+                                           TextColor="White"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Middle: Talon (Play Area) - Takes most space -->
+            <Border Grid.Row="1" 
+                    BackgroundColor="#1A3010" 
+                    Stroke="#4A7029"
+                    StrokeThickness="2"
+                    Padding="5"
+                    VerticalOptions="Fill">
+                <Grid>
+                    <CollectionView x:Name="TalonCardsCollection"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"
+                                   SelectionMode="None">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Horizontal" 
+                                             ItemSpacing="6"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="TalonCardBorder"
+                                        BackgroundColor="White"
+                                        Stroke="Gray"
+                                        StrokeThickness="2"
+                                        WidthRequest="65"
+                                        HeightRequest="85"
+                                        Margin="3">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="6"/>
+                                    </Border.StrokeShape>
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                            <Setter Property="Stroke" Value="Gold"/>
+                                            <Setter Property="StrokeThickness" Value="3"/>
+                                            <Setter Property="Scale" Value="1.1"/>
+                                        </DataTrigger>
+                                    </Border.Triggers>
+                                    <Label Text="{Binding DisplayText}" 
+                                           FontSize="24"
+                                           FontAttributes="Bold"
+                                           TextColor="Black"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnTalonCardTapped"/>
+                                    </Border.GestureRecognizers>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </Grid>
+            </Border>
+
+            <!-- Bottom: Player's Hand -->
+            <Border Grid.Row="2" 
+                    BackgroundColor="#1A3010" 
+                    Stroke="#4A7029"
+                    StrokeThickness="1"
+                    Padding="4">
+                <VerticalStackLayout Spacing="2">
+                    <Label Text="Your Hand" 
+                           FontSize="12" 
+                           FontAttributes="Bold"
+                           TextColor="White"
+                           HorizontalOptions="Center"/>
+
+                    <CollectionView x:Name="PlayerHandCollection"
+                                   HeightRequest="90"
+                                   HorizontalOptions="Center"
+                                   SelectionMode="None">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Horizontal" 
+                                             ItemSpacing="3"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="PlayerCardBorder"
+                                        BackgroundColor="White"
+                                        Stroke="Blue"
+                                        StrokeThickness="2"
+                                        WidthRequest="65"
+                                        HeightRequest="85"
+                                        Margin="1">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="6"/>
+                                    </Border.StrokeShape>
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                            <Setter Property="Stroke" Value="LimeGreen"/>
+                                            <Setter Property="StrokeThickness" Value="3"/>
+                                            <Setter Property="Scale" Value="1.1"/>
+                                        </DataTrigger>
+                                    </Border.Triggers>
+                                    <Label Text="{Binding DisplayText}" 
+                                           FontSize="22"
+                                           FontAttributes="Bold"
+                                           TextColor="{Binding SuitColor}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnPlayerCardTapped"/>
+                                    </Border.GestureRecognizers>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

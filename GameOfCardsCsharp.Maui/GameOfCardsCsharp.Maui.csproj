@@ -58,6 +58,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Compile Update="TablicGamePageAndroid.xaml.cs">
+	    <DependentUpon>TablicGamePageAndroid.xaml</DependentUpon>
+	  </Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <MauiXaml Update="TablicGamePageAndroid.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
 	  <MauiXaml Update="TablicGamePage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>

@@ -1,13 +1,16 @@
-﻿namespace GameOfCardsCsharp.Maui
+﻿namespace GameOfCardsCsharp.Maui;
+
+public partial class AppShell : Shell
 {
-    public partial class AppShell : Shell
+    public AppShell()
     {
-        public AppShell()
-        {
-            InitializeComponent();
-            
-            // Register routes for navigation
-            Routing.RegisterRoute("tablicgame", typeof(TablicGamePage));
-        }
+        InitializeComponent();
+        
+        // Set platform-specific content template
+#if ANDROID
+        TablicGameShellContent.ContentTemplate = new DataTemplate(typeof(TablicGamePageAndroid));
+#else
+        TablicGameShellContent.ContentTemplate = new DataTemplate(typeof(TablicGamePage));
+#endif
     }
 }
