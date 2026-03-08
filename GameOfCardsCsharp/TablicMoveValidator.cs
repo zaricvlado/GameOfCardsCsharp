@@ -110,8 +110,9 @@ namespace GameOfCardsCsharp
             {
                 int cardValue = rules.GetCardValue(talon[i]);
                 
-                // Primary filter: Only consider cards with value <= target value
-                if (cardValue <= targetValue)
+                // CRITICAL: Never filter Aces - they have dual values (1 or 11)
+                // Primary filter: Only consider cards with value <= target value OR Aces
+                if (cardValue <= targetValue || talon[i].Rank == Rank.Ace)
                 {
                     candidates.Add((i, cardValue, talon[i]));
                 }
@@ -124,16 +125,20 @@ namespace GameOfCardsCsharp
             }
 
             // Advanced filtering: Prioritize more valuable cards
-            // Sort by: 1) Trick cards first, 2) Higher value, 3) Original position
-            var prioritized = candidates
+            // Ensure Aces are always included due to their dual-value nature
+            var aces = candidates.Where(c => c.card.Rank == Rank.Ace).ToList();
+            var nonAces = candidates.Where(c => c.card.Rank != Rank.Ace).ToList();
+
+            // Sort non-Aces by: 1) Trick cards first, 2) Higher value, 3) Original position
+            var prioritizedNonAces = nonAces
                 .OrderByDescending(c => rules.GetTrickValue(c.card))
                 .ThenByDescending(c => c.value)
                 .ThenBy(c => c.index)
                 .ToList();
 
-            // Take top MAX_TALON_CARDS_TO_CONSIDER cards
-            var selected = prioritized
-                .Take(MAX_TALON_CARDS_TO_CONSIDER)
+            // Take all Aces + fill remaining slots with prioritized non-Aces
+            var selected = aces
+                .Concat(prioritizedNonAces.Take(MAX_TALON_CARDS_TO_CONSIDER - aces.Count))
                 .Select(c => c.index)
                 .OrderBy(idx => idx) // Restore original order
                 .ToList();
