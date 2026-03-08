@@ -13,14 +13,14 @@
         <Grid Grid.Column="0" 
               RowDefinitions="Auto,*,Auto" 
               Padding="5"
-              RowSpacing="10">
+              RowSpacing="5">
 
             <!-- Top: AI Opponent's Hand -->
             <Border Grid.Row="0" 
                     BackgroundColor="#1A3010" 
                     Stroke="#4A7029"
                     StrokeThickness="2"
-                    Padding="10">
+                    Padding="8">
                 <VerticalStackLayout Spacing="5">
                     <Label Text="AI Opponent" 
                            FontSize="16" 
@@ -65,22 +65,11 @@
                     BackgroundColor="#1A3010" 
                     Stroke="#4A7029"
                     StrokeThickness="3"
-                    Padding="15"
+                    Padding="8"
                     VerticalOptions="Fill">
-                <Grid RowDefinitions="Auto,*">
-                    
-                    <!-- Talon Title -->
-                    <Label Grid.Row="0"
-                           Text="Talon (Table Cards)" 
-                           FontSize="22" 
-                           FontAttributes="Bold"
-                           TextColor="White"
-                           HorizontalOptions="Center"
-                           Margin="0,0,0,15"/>
-
-                    <!-- Talon Cards (clickable) - Larger and centered -->
-                    <CollectionView Grid.Row="1"
-                                   x:Name="TalonCardsCollection"
+                <Grid>
+                    <!-- Talon Cards (clickable) - Centered, NO TITLE -->
+                    <CollectionView x:Name="TalonCardsCollection"
                                    HorizontalOptions="Center"
                                    VerticalOptions="Center"
                                    SelectionMode="None">
@@ -120,7 +109,6 @@
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
-
                 </Grid>
             </Border>
 
@@ -129,7 +117,7 @@
                     BackgroundColor="#1A3010" 
                     Stroke="#4A7029"
                     StrokeThickness="2"
-                    Padding="10">
+                    Padding="8">
                 <VerticalStackLayout Spacing="5">
                     <Label Text="Your Hand" 
                            FontSize="16" 
@@ -137,7 +125,7 @@
                            TextColor="White"
                            HorizontalOptions="Center"/>
 
-                    <!-- Player's Hand (clickable cards) - Same size as talon cards -->
+                    <!-- Player's Hand (clickable cards) -->
                     <CollectionView x:Name="PlayerHandCollection"
                                    HeightRequest="120"
                                    HorizontalOptions="Center"
@@ -219,7 +207,6 @@
                               RowDefinitions="Auto,Auto"
                               ColumnSpacing="5"
                               Margin="0,5,0,0">
-                            <!-- Header Row -->
                             <Label Grid.Row="0" Grid.Column="0" 
                                    Text="🃏 Cards" 
                                    FontSize="10" 
@@ -236,7 +223,6 @@
                                    TextColor="#FFA500"
                                    HorizontalOptions="Center"/>
                             
-                            <!-- Value Row -->
                             <Label Grid.Row="1" Grid.Column="0"
                                    x:Name="OpponentCardsLabel" 
                                    Text="0" 
@@ -262,7 +248,7 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Game Status Panel -->
+                <!-- Game Status Panel with Round Info (Option A: Inline) -->
                 <Border BackgroundColor="#4A7029" 
                         Stroke="#6A9039"
                         StrokeThickness="2"
@@ -271,11 +257,24 @@
                         <RoundRectangle CornerRadius="10"/>
                     </Border.StrokeShape>
                     <VerticalStackLayout Spacing="5">
-                        <Label Text="📍 Game Status" 
-                               FontSize="14" 
-                               FontAttributes="Bold"
-                               TextColor="White"
-                               HorizontalOptions="Center"/>
+                        <!-- Title with Round Info Inline -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0"
+                                   Text="📍 Game Status" 
+                                   FontSize="14" 
+                                   FontAttributes="Bold"
+                                   TextColor="White"
+                                   HorizontalOptions="Start"
+                                   VerticalOptions="Center"/>
+                            <Label Grid.Column="1"
+                                   x:Name="RoundInfoLabel" 
+                                   Text="Round 1/4" 
+                                   FontSize="12"
+                                   FontAttributes="Bold"
+                                   TextColor="#FFD700"
+                                   HorizontalOptions="End"
+                                   VerticalOptions="Center"/>
+                        </Grid>
                         
                         <BoxView HeightRequest="1" Color="#6A9039" Margin="0,3"/>
                         
@@ -289,53 +288,7 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Game Controls Panel -->
-                <Border BackgroundColor="#1A3010" 
-                        Stroke="#4A7029"
-                        StrokeThickness="2"
-                        Padding="15">
-                    <Border.StrokeShape>
-                        <RoundRectangle CornerRadius="10"/>
-                    </Border.StrokeShape>
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="⚙️ Game Controls" 
-                               FontSize="16" 
-                               FontAttributes="Bold"
-                               TextColor="White"
-                               HorizontalOptions="Center"/>
-                        
-                        <BoxView HeightRequest="1" Color="#4A7029" Margin="0,5"/>
-
-                        <Label x:Name="RoundInfoLabel" 
-                               Text="Round: 1/4" 
-                               FontSize="14"
-                               FontAttributes="Bold"
-                               TextColor="#FFD700"
-                               HorizontalOptions="Center"
-                               Margin="0,0,0,10"/>
-
-                        <Button x:Name="NewGameButton"
-                                Text="🎮 New Game"
-                                Clicked="OnNewGameClicked"
-                                BackgroundColor="#4A7029"
-                                TextColor="White"
-                                FontSize="14"
-                                CornerRadius="8"
-                                Padding="10"/>
-
-                        <Button x:Name="ShowPossibleMovesButton"
-                                Text="💡 Show Hints"
-                                Clicked="OnShowPossibleMovesClicked"
-                                BackgroundColor="#6A7029"
-                                TextColor="White"
-                                FontSize="14"
-                                CornerRadius="8"
-                                Padding="10"
-                                IsEnabled="False"/>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- Player Score Panel -->
+                <!-- Player Score Panel (moved up) -->
                 <Border BackgroundColor="#1A3010" 
                         Stroke="#4A7029"
                         StrokeThickness="2"
@@ -367,7 +320,6 @@
                               RowDefinitions="Auto,Auto"
                               ColumnSpacing="5"
                               Margin="0,5,0,0">
-                            <!-- Header Row -->
                             <Label Grid.Row="0" Grid.Column="0" 
                                    Text="🃏 Cards" 
                                    FontSize="10" 
@@ -384,7 +336,6 @@
                                    TextColor="#FFA500"
                                    HorizontalOptions="Center"/>
 
-                            <!-- Value Row -->
                             <Label Grid.Row="1" Grid.Column="0"
                                    x:Name="PlayerCardsLabel" 
                                    Text="0" 
@@ -410,7 +361,45 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- NEW: Player Pile Viewer (Expandable) -->
+                <!-- Game Controls Panel (moved below Your Score) -->
+                <Border BackgroundColor="#1A3010" 
+                        Stroke="#4A7029"
+                        StrokeThickness="2"
+                        Padding="15">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="10"/>
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="⚙️ Game Controls" 
+                               FontSize="16" 
+                               FontAttributes="Bold"
+                               TextColor="White"
+                               HorizontalOptions="Center"/>
+                        
+                        <BoxView HeightRequest="1" Color="#4A7029" Margin="0,5"/>
+
+                        <Button x:Name="NewGameButton"
+                                Text="🎮 New Game"
+                                Clicked="OnNewGameClicked"
+                                BackgroundColor="#4A7029"
+                                TextColor="White"
+                                FontSize="14"
+                                CornerRadius="8"
+                                Padding="10"/>
+
+                        <Button x:Name="ShowPossibleMovesButton"
+                                Text="💡 Show Hints"
+                                Clicked="OnShowPossibleMovesClicked"
+                                BackgroundColor="#6A7029"
+                                TextColor="White"
+                                FontSize="14"
+                                CornerRadius="8"
+                                Padding="10"
+                                IsEnabled="False"/>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Player Pile Viewer (Expandable) -->
                 <Border BackgroundColor="#1A3010" 
                         Stroke="#4A7029"
                         StrokeThickness="2"
@@ -419,7 +408,6 @@
                         <RoundRectangle CornerRadius="10"/>
                     </Border.StrokeShape>
                     <VerticalStackLayout Spacing="8">
-                        <!-- Expandable Header -->
                         <Border BackgroundColor="#2D5016"
                                 Padding="10"
                                 Stroke="#4A7029"
@@ -451,22 +439,18 @@
                             </Grid>
                         </Border>
 
-                        <!-- Expandable Content -->
                         <VerticalStackLayout x:Name="PlayerPileContent"
                                            IsVisible="False"
                                            Spacing="5">
                             <BoxView HeightRequest="1" Color="#4A7029" Margin="0,5"/>
                             
-                            <!-- Pile Cards Display -->
                             <FlexLayout x:Name="PlayerPileCardsLayout"
                                       Wrap="Wrap"
                                       JustifyContent="Start"
                                       AlignItems="Start"
                                       Direction="Row">
-                                <!-- Cards will be added dynamically -->
                             </FlexLayout>
                             
-                            <!-- Empty state -->
                             <Label x:Name="PlayerPileEmptyLabel"
                                    Text="No cards captured yet" 
                                    FontSize="12"
@@ -477,7 +461,7 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Move History Panel (existing) -->
+                <!-- Move History Panel -->
                 <Border BackgroundColor="#1A3010" 
                         Stroke="#4A7029"
                         StrokeThickness="2"
@@ -486,7 +470,6 @@
                         <RoundRectangle CornerRadius="10"/>
                     </Border.StrokeShape>
                     <VerticalStackLayout Spacing="8">
-                        <!-- Expandable Header -->
                         <Border BackgroundColor="#2D5016"
                                 Padding="10"
                                 Stroke="#4A7029"
@@ -515,7 +498,6 @@
                             </Grid>
                         </Border>
 
-                        <!-- Expandable Content -->
                         <VerticalStackLayout x:Name="MoveHistoryContent"
                                            IsVisible="False"
                                            Spacing="5">
@@ -535,7 +517,7 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- NEW: Debug Panel (ADD THIS AT THE BOTTOM) -->
+                <!-- Debug Panel -->
                 <Border BackgroundColor="#1A1A2E" 
                         Stroke="#4A4A7A"
                         StrokeThickness="2"
@@ -552,7 +534,6 @@
                         
                         <BoxView HeightRequest="1" Color="#4A4A7A" Margin="0,5"/>
                         
-                        <!-- Enable/Disable Logging Toggle -->
                         <Grid ColumnDefinitions="*,Auto" Margin="0,5">
                             <Label Grid.Column="0"
                                    Text="Enable Logging" 
@@ -567,7 +548,6 @@
                                     ThumbColor="White"/>
                         </Grid>
                         
-                        <!-- Status Label -->
                         <Label x:Name="LoggingStatusLabel"
                                Text="❌ Logging Disabled" 
                                FontSize="10"
@@ -576,7 +556,6 @@
                         
                         <BoxView HeightRequest="1" Color="#3A3A5A" Margin="0,5"/>
                         
-                        <!-- Log Level Picker -->
                         <Label Text="Log Level:" 
                                FontSize="11"
                                TextColor="White"/>
@@ -597,7 +576,6 @@
                         
                         <BoxView HeightRequest="1" Color="#3A3A5A" Margin="0,5"/>
                         
-                        <!-- Current Log File Info -->
                         <Label Text="Current Log:" 
                                FontSize="10"
                                TextColor="#90EE90"/>
@@ -609,7 +587,6 @@
                                LineBreakMode="TailTruncation"
                                MaxLines="2"/>
                         
-                        <!-- Action Buttons -->
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="5" Margin="0,5,0,0">
                             <Button Grid.Column="0"
                                     Text="📂 Folder"
@@ -632,7 +609,6 @@
                                     IsEnabled="False"/>
                         </Grid>
                         
-                        <!-- Session Info -->
                         <BoxView HeightRequest="1" Color="#3A3A5A" Margin="0,5"/>
                         
                         <Label x:Name="SessionInfoLabel"
