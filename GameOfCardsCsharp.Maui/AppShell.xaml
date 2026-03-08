@@ -7,18 +7,18 @@
     Shell.FlyoutBehavior="Flyout"
     Title="GameOfCardsCsharp.Maui">
 
-    <FlyoutItem Title="Sample Game">
-        <ShellContent
-            Title="Sample"
-            ContentTemplate="{DataTemplate local:MainPage}"
-            Route="MainPage" />
-    </FlyoutItem>
-
     <FlyoutItem Title="Tablic Game">
         <ShellContent
             Title="Tablic"
             ContentTemplate="{DataTemplate local:TablicGamePage}"
             Route="TablicGamePage" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Sample Game">
+        <ShellContent
+            Title="Sample"
+            ContentTemplate="{DataTemplate local:MainPage}"
+            Route="MainPage" />
     </FlyoutItem>
 
 </Shell>
