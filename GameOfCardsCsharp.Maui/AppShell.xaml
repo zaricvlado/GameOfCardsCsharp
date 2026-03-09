@@ -11,6 +11,7 @@
         <ShellContent
             x:Name="TablicGameShellContent"
             Title="Tablic"
+            ContentTemplate="{DataTemplate local:TablicGamePage}"
             Route="TablicGamePage" />
     </FlyoutItem>
 

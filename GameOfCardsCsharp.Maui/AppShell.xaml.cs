@@ -5,12 +5,13 @@ public partial class AppShell : Shell
     public AppShell()
     {
         InitializeComponent();
-        
-        // Set platform-specific content template
-#if ANDROID
-        TablicGameShellContent.ContentTemplate = new DataTemplate(typeof(TablicGamePageAndroid));
-#else
+
+#if WINDOWS
+        // Windows uses the desktop UI
         TablicGameShellContent.ContentTemplate = new DataTemplate(typeof(TablicGamePage));
+#else
+        // Android and iOS use the mobile UI
+        TablicGameShellContent.ContentTemplate = new DataTemplate(typeof(TablicGamePageMobile));
 #endif
     }
 }
