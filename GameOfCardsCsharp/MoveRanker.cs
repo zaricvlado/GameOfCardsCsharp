@@ -19,11 +19,11 @@ namespace GameOfCardsCsharp
         /// <summary>
         /// Gets the top N best moves according to the strategy
         /// </summary>
-        public List<RankedMove> GetBestMoves(TablicGameState state, List<PossibleMove> possibleMoves, int count)
+        public List<TablicRankedMove> GetBestMoves(TablicGameState state, List<PossibleMove> possibleMoves, int count)
         {
             if (possibleMoves.Count == 0)
             {
-                return new List<RankedMove>();
+                return new List<TablicRankedMove>();
             }
 
             // Score all moves using strategy's EvaluateMove
@@ -31,7 +31,7 @@ namespace GameOfCardsCsharp
                 .Select(move => (move, score: strategy.EvaluateMove(move, state)))
                 .OrderByDescending(x => x.score)
                 .Take(count)
-                .Select((x, index) => new RankedMove
+                .Select((x, index) => new TablicRankedMove
                 {
                     Move = x.move,
                     Score = x.score,
@@ -45,16 +45,16 @@ namespace GameOfCardsCsharp
         /// <summary>
         /// Get all moves ranked by score
         /// </summary>
-        public List<RankedMove> GetAllMovesRanked(TablicGameState state, List<PossibleMove> possibleMoves)
+        public List<TablicRankedMove> GetAllMovesRanked(TablicGameState state, List<PossibleMove> possibleMoves)
         {
             return GetBestMoves(state, possibleMoves, possibleMoves.Count);
         }
     }
 
     /// <summary>
-    /// A move with its evaluated score and rank
+    /// A Tablic move with its evaluated score and rank
     /// </summary>
-    public class RankedMove
+    public class TablicRankedMove
     {
         public PossibleMove Move { get; set; } = new();
         public int Score { get; set; }

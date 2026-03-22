@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameOfCardsCsharp.Test", "G
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameOfCardsCsharp.Maui", "GameOfCardsCsharp.Maui\GameOfCardsCsharp.Maui.csproj", "{94496615-EFB6-4AD7-9F65-35B9AC1C8502}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameOfCardsCsharp.PreferanceBots", "GameOfCardsCsharp.PreferanceBots\GameOfCardsCsharp.PreferanceBots.csproj", "{005494AF-3936-485B-B16A-2B88898AA4BF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +37,11 @@ Global
 		{94496615-EFB6-4AD7-9F65-35B9AC1C8502}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{94496615-EFB6-4AD7-9F65-35B9AC1C8502}.Release|Any CPU.Build.0 = Release|Any CPU
 		{94496615-EFB6-4AD7-9F65-35B9AC1C8502}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{005494AF-3936-485B-B16A-2B88898AA4BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{005494AF-3936-485B-B16A-2B88898AA4BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{005494AF-3936-485B-B16A-2B88898AA4BF}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{005494AF-3936-485B-B16A-2B88898AA4BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{005494AF-3936-485B-B16A-2B88898AA4BF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

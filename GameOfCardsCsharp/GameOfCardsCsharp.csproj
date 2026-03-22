@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Preferance\Betl\" />
+    <Folder Include="Preferance\Trump\" />
+  </ItemGroup>
+
 </Project>

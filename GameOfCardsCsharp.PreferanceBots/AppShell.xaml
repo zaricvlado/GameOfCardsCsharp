@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="GameOfCardsCsharp.PreferanceBots.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:GameOfCardsCsharp.PreferanceBots"
+    Title="Preferance Bots">
+
+    <TabBar>
+        <ShellContent
+            Title="Sans Game"
+            Icon="dotnet_bot.png"
+            ContentTemplate="{DataTemplate local:SansPage}"
+            Route="SansPage" />
+
+        <ShellContent
+            Title="Trump Game"
+            Icon="dotnet_bot.png"
+            ContentTemplate="{DataTemplate local:MainPage}"
+            Route="TrumpPage" />
+
+        <ShellContent
+            Title="Betl Game"
+            Icon="dotnet_bot.png"
+            ContentTemplate="{DataTemplate local:MainPage}"
+            Route="BetlPage" />
+    </TabBar>
+
+</Shell>
