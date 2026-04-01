@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using GameOfCardsCsharp.Preferance.Bidding;
 
 namespace GameOfCardsCsharp.Preferance
 {
@@ -14,6 +13,7 @@ namespace GameOfCardsCsharp.Preferance
         private readonly int playerId;
         private readonly Hand hand = new();
         private readonly List<Card> pile = new();
+        private PlayerBidContext? _bidContext;
 
         public PreferancePlayer(int playerId)
         {
@@ -23,6 +23,24 @@ namespace GameOfCardsCsharp.Preferance
         public int GetPlayerId() => playerId;
 
         public Hand GetHand() => hand;
+
+        public PlayerRole Role { get; set; } = PlayerRole.None;
+
+        public PlayerState State { get; set; } = PlayerState.None;
+
+        /// <summary>
+        /// Gets the current bid context (null if not in bidding phase)
+        /// </summary>
+        public PlayerBidContext? BidContext => _bidContext;
+
+        /// <summary>
+        /// Links this player to a bid context during bidding phase.
+        /// Called internally by BiddingEngine.
+        /// </summary>
+        internal void SetBidContext(PlayerBidContext? context)
+        {
+            _bidContext = context;
+        }
 
         public void AddToPile(Card card)
         {
@@ -42,6 +60,9 @@ namespace GameOfCardsCsharp.Preferance
         {
             hand.Clear();
             pile.Clear();
+            Role = PlayerRole.None;
+            State = PlayerState.None;
+            _bidContext = null;
         }
     }
 }

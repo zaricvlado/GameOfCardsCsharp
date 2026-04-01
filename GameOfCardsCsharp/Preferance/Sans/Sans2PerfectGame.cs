@@ -64,13 +64,13 @@ namespace GameOfCardsCsharp.Preferance.Sans
     /// Perfect information game for 2-player Sans (no-trump).
     /// Uses recursive evaluation to determine optimal moves.
     /// </summary>
-    public class SansPerfectGame
+    public class Sans2PerfectGame
     {
         private readonly PerfPerfectGameState _state;
 
         public PerfPerfectGameState State => _state;
 
-        public SansPerfectGame(PerfPerfectGameState state)
+        public Sans2PerfectGame(PerfPerfectGameState state)
         {
             if (state.Players.Count != 2)
             {
@@ -86,9 +86,10 @@ namespace GameOfCardsCsharp.Preferance.Sans
         }
 
         /// <summary>
-        /// Calculates the best lead card for the current player in a 2-player game
+        /// Calculates the best lead card for the current player in a 2-player game.
+        /// Returns a PerfectCardMove with ExpectedTricks populated.
         /// </summary>
-        public PerfectCardMove BestLeadCard2()
+        public PerfectCardMove BestLeadCard()
         {
             int handsLeft = CountRemainingHands();
             var candidates = _state.GetCandidateMovesForCurrentPlayer().ToList();
@@ -99,12 +100,12 @@ namespace GameOfCardsCsharp.Preferance.Sans
             }
 
             PerfectCardMove bestMove = candidates[0];
-            Score2 bestScore = CalculateScore2(candidates[0], handsLeft);
+            Score2 bestScore = CalculateScore(candidates[0], handsLeft);
 
             for (int i = 1; i < candidates.Count; i++)
             {
                 var move = candidates[i];
-                var score = CalculateScore2(move, handsLeft);
+                var score = CalculateScore(move, handsLeft);
 
                 // Choose move that maximizes current player's tricks
                 if (score.TricksWon[_state.CurrentPlayerIndex] > bestScore.TricksWon[_state.CurrentPlayerIndex])
@@ -114,21 +115,23 @@ namespace GameOfCardsCsharp.Preferance.Sans
                 }
             }
 
-            return bestMove;
+            // Return the best move WITH expected tricks attached
+            return bestMove.WithExpectedTricks(bestScore.TricksWon);
         }
 
         /// <summary>
         /// Calculates the best follow move for the given player responding to a lead card.
         /// Optimized to avoid enumerating all candidates.
+        /// Returns a PerfectCardMove with ExpectedTricks populated.
         /// </summary>
-        public PerfectCardMove BestFollowMove2(PerfectCardMove leadMove)
+        public PerfectCardMove BestFollowCard(PerfectCardMove leadMove)
         {
             // Validate that the current player is different from the lead player
             if (_state.CurrentPlayerIndex == leadMove.PlayerIndex)
             {
                 throw new InvalidOperationException(
                     $"Cannot find follow move: current player ({_state.CurrentPlayerIndex}) is the same as lead player ({leadMove.PlayerIndex}). " +
-                    "The game state must be advanced before calling BestFollowMove2.");
+                    "The game state must be advanced before calling BestFollowMove.");
             }
 
             int currentPlayer = _state.CurrentPlayerIndex;
@@ -136,44 +139,89 @@ namespace GameOfCardsCsharp.Preferance.Sans
 
             // First, try to find a card in the lead suit
             var followMove = FindBestFollowInSuit(leadMove, suitMoves, currentPlayer);
-            if (followMove != null)
+            
+            if (followMove == null)
             {
-                return followMove;
+                // Cannot follow suit - find a card to discard
+                followMove = FindBestDiscard(leadMove.Card.Suit, currentPlayer);
             }
 
-            // Cannot follow suit - find a card to discard
-            return FindBestDiscard(leadMove.Card.Suit, currentPlayer);
+            // Calculate expected score for this follow move
+            // We need to simulate playing both the lead card and follow card
+            int handsLeft = CountRemainingHands();
+            Score2 expectedScore = CalculateFollowScore(leadMove, followMove, handsLeft);
+
+            // Return the follow move WITH expected tricks attached
+            return followMove.WithExpectedTricks(expectedScore.TricksWon);
+        }
+
+        /// <summary>
+        /// Calculates the expected score after playing a lead and follow card.
+        /// This simulates the trick completion and subsequent optimal play.
+        /// </summary>
+        private Score2 CalculateFollowScore(PerfectCardMove leadMove, PerfectCardMove followMove, int handsLeft)
+        {
+            // Mark both cards as played
+            _state.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = false;
+            _state.Moves[(int)followMove.Card.Suit][followMove.ListIndex].Available = false;
+
+            // Determine winner of this trick
+            int winnerIndex = GetWinner(leadMove, followMove);
+
+            // Save current player
+            int originalPlayer = _state.CurrentPlayerIndex;
+
+            // Set winner as current player for next trick
+            _state.CurrentPlayerIndex = winnerIndex;
+
+            // Recursively calculate score for remaining hands
+            Score2 futureScore = CalculateScoreCore(handsLeft - 1);
+
+            // Update result: increment trick count for winner
+            Score2 result = futureScore.IncrementPlayer(winnerIndex);
+
+            // Restore state
+            _state.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = true;
+            _state.Moves[(int)followMove.Card.Suit][followMove.ListIndex].Available = true;
+            _state.CurrentPlayerIndex = originalPlayer;
+
+            return result;
         }
 
         /// <summary>
         /// Finds the best card to play in the lead suit.
-        /// Looks right for a larger card, or left for the smallest card.
+        /// Cards are sorted from highest to lowest (A, K, Q, J, 10, 9, 8, 7).
+        /// Strategy: Try to win with the smallest winning card, or lose with the smallest losing card.
         /// </summary>
         private PerfectCardMove? FindBestFollowInSuit(PerfectCardMove leadMove, List<PerfectCardMove> suitMoves, int currentPlayer)
         {
             int startIndex = leadMove.ListIndex;
-
-            // Look right for the first available larger card belonging to current player
-            for (int i = startIndex + 1; i < suitMoves.Count; i++)
-            {
-                var move = suitMoves[i];
-                if (move.Available && move.PlayerIndex == currentPlayer)
-                {
-                    return move;
-                }
-            }
-
-            // No larger card found - look left for the smallest available card
+            
+            // First, look for a card that can WIN (larger than lead card)
+            // Search left from the lead card (towards index 0 = higher cards)
             for (int i = startIndex - 1; i >= 0; i--)
             {
                 var move = suitMoves[i];
                 if (move.Available && move.PlayerIndex == currentPlayer)
                 {
-                    return move;
+                    return move; // Found smallest winning card
                 }
             }
 
-            // No cards in this suit
+            // No winning card found - need to LOSE with smallest card
+            // Search from the absolute end of the list (highest index = smallest cards)
+            // We search the entire remaining portion because we want the absolute smallest card
+            for (int i = suitMoves.Count - 1; i > startIndex; i--)
+            {
+                var move = suitMoves[i];
+                if (move.Available && move.PlayerIndex == currentPlayer)
+                {
+                    return move; // Return smallest losing card
+                }
+            }
+
+            // No cards found in the range after startIndex
+            // This shouldn't happen if player has cards in this suit, but check just in case
             return null;
         }
 
@@ -182,15 +230,16 @@ namespace GameOfCardsCsharp.Preferance.Sans
         /// if the opponent always leads with their strongest available cards.
         /// 
         /// Algorithm:
-        /// - Start from the highest card (right end)
-        /// - If it's current player's card, count +1 and move left
+        /// - Cards are sorted from highest to lowest (A, K, Q, J, 10, 9, 8, 7)
+        /// - Start from the highest card (left/beginning of the list - index 0)
+        /// - If it's current player's card, count +1 and move right
         /// - If it's opponent's card, opponent leads with it
-        ///   - Current player must follow with their lowest card
+        ///   - Current player must follow with their lowest card (right end of their cards)
         ///   - Remove both cards
         /// - If current player has no cards to follow, remaining opponent cards are ignored
         /// 
-        /// Examples:
-        /// - ABBA -> 1 (B leads with highest, A discards lowest A, remaining highest A wins)
+        /// Examples (highest to lowest):
+        /// - ABBA -> 1 (B leads with highest B, A discards lowest A, remaining highest A wins)
         /// - AABB -> 2 (both A's win)
         /// - BBAA -> 0 (B's eat both A's)
         /// - K,10 vs A,Q (BABA) -> 1 (B leads A, A discards 10, K remains and wins)
@@ -220,9 +269,9 @@ namespace GameOfCardsCsharp.Preferance.Sans
 
             while (true)
             {
-                // Find highest card still in play
+                // Find highest card still in play (cards sorted highest to lowest, so search from beginning)
                 int highestIdx = -1;
-                for (int i = suitMoves.Count - 1; i >= 0; i--)
+                for (int i = 0; i < suitMoves.Count; i++)
                 {
                     if (inPlay[i])
                     {
@@ -245,9 +294,9 @@ namespace GameOfCardsCsharp.Preferance.Sans
                 else
                 {
                     // Opponent has highest card - opponent leads with it
-                    // Current player must follow with their LOWEST card
+                    // Current player must follow with their LOWEST card (search from end)
                     int lowestCurrentPlayerIdx = -1;
-                    for (int i = 0; i < suitMoves.Count; i++)
+                    for (int i = suitMoves.Count - 1; i >= 0; i--)
                     {
                         if (inPlay[i] && suitMoves[i].PlayerIndex == currentPlayer)
                         {
@@ -407,51 +456,11 @@ namespace GameOfCardsCsharp.Preferance.Sans
         }
 
         /// <summary>
-        /// Determines if a suit is hopeless for the current player.
-        /// A suit is hopeless if the ownership pattern guarantees no tricks can be won.
-        /// Examples: AAB, AAABB (B never wins), but AABBAB is not hopeless.
-        /// </summary>
-        private bool IsSuitHopeless(List<PerfectCardMove> suitMoves, int currentPlayer)
-        {
-            int otherPlayer = (currentPlayer + 1) % 2;
-            int currentPlayerCards = 0;
-            int opponentHighCards = 0;
-
-            // Count available cards for each player
-            for (int i = suitMoves.Count - 1; i >= 0; i--)
-            {
-                var move = suitMoves[i];
-                if (!move.Available)
-                    continue;
-
-                if (move.PlayerIndex == otherPlayer)
-                {
-                    opponentHighCards++;
-                }
-                else if (move.PlayerIndex == currentPlayer)
-                {
-                    currentPlayerCards++;
-                    
-                    // If we have more cards than opponent's high cards so far,
-                    // we can potentially win a trick by discarding lower cards
-                    if (currentPlayerCards > opponentHighCards)
-                    {
-                        return false; // Not hopeless
-                    }
-                }
-            }
-
-            // If we get here, opponent has at least as many high cards as we have total cards
-            // This means we cannot win any tricks in this suit
-            return true;
-        }
-
-        /// <summary>
         /// Evaluates a specific lead move and returns the resulting score.
         /// Always maximizes the score for the current player.
         /// Called after a hand is completed.
         /// </summary>
-        private Score2 CalculateScore2(PerfectCardMove move, int handsLeft)
+        public Score2 CalculateScore(PerfectCardMove move, int handsLeft)
         {
             // Base case: no more hands to play
             if (handsLeft <= 0)
@@ -469,7 +478,7 @@ namespace GameOfCardsCsharp.Preferance.Sans
             _state.CurrentPlayerIndex = nextPlayer;
 
             // Get best follow move from next player
-            PerfectCardMove move2 = BestFollowMove2(move);
+            PerfectCardMove move2 = BestFollowMove(move);
 
             // Mark the follow card as played
             _state.Moves[(int)move2.Card.Suit][move2.ListIndex].Available = false;
@@ -482,7 +491,7 @@ namespace GameOfCardsCsharp.Preferance.Sans
 
             // Recursively calculate score for remaining hands
             // (Winner leads next trick, so this maximizes winner's score)
-            Score2 futureScore = CalculateScore2Core(handsLeft - 1);
+            Score2 futureScore = CalculateScoreCore(handsLeft - 1);
 
             // Update result: increment trick count for winner
             Score2 result = futureScore.IncrementPlayer(winnerIndex);
@@ -498,9 +507,29 @@ namespace GameOfCardsCsharp.Preferance.Sans
         }
 
         /// <summary>
+        /// Internal helper method that doesn't attach ExpectedTricks (to avoid recursion overhead)
+        /// </summary>
+        private PerfectCardMove BestFollowMove(PerfectCardMove leadMove)
+        {
+            int currentPlayer = _state.CurrentPlayerIndex;
+            var suitMoves = _state.Moves[(int)leadMove.Card.Suit];
+
+            // First, try to find a card in the lead suit
+            var followMove = FindBestFollowInSuit(leadMove, suitMoves, currentPlayer);
+            
+            if (followMove != null)
+            {
+                return followMove;
+            }
+
+            // Cannot follow suit - find a card to discard
+            return FindBestDiscard(leadMove.Card.Suit, currentPlayer);
+        }
+
+        /// <summary>
         /// Core recursive calculation - finds best lead move for current player
         /// </summary>
-        private Score2 CalculateScore2Core(int handsLeft)
+        private Score2 CalculateScoreCore(int handsLeft)
         {
             // Base case: no more hands to play
             if (handsLeft <= 0)
@@ -518,11 +547,11 @@ namespace GameOfCardsCsharp.Preferance.Sans
             }
 
             // Find the move that maximizes the current player's score
-            Score2 bestScore = CalculateScore2(candidates[0], handsLeft);
+            Score2 bestScore = CalculateScore(candidates[0], handsLeft);
 
             for (int i = 1; i < candidates.Count; i++)
             {
-                var score = CalculateScore2(candidates[i], handsLeft);
+                var score = CalculateScore(candidates[i], handsLeft);
                 
                 if (score.TricksWon[currentPlayer] > bestScore.TricksWon[currentPlayer])
                 {

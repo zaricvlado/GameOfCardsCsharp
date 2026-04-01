@@ -8,10 +8,10 @@
 
     <TabBar>
         <ShellContent
-            Title="Sans Game"
+            Title="Preferance"
             Icon="dotnet_bot.png"
-            ContentTemplate="{DataTemplate local:SansPage}"
-            Route="SansPage" />
+            ContentTemplate="{DataTemplate local:PreferancePage}"
+            Route="PreferancePage" />
 
         <ShellContent
             Title="Trump Game"

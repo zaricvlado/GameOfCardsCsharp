@@ -1,0 +1,578 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="GameOfCardsCsharp.PreferanceBots.PreferancePage"
+             Title="Preferance - 3 Players"
+             BackgroundColor="#2D5016">
+
+    <!-- Main Layout: Game Area | Control Panel -->
+    <Grid ColumnDefinitions="*,350" Padding="10">
+
+        <!-- LEFT COLUMN: Game Board -->
+        <Grid Grid.Column="0" 
+              RowDefinitions="*,180" 
+              ColumnDefinitions="100,*,100"
+              Padding="5">
+
+            <!-- LEFT PLAYER (Vertical, full height on left side) -->
+            <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
+                    BackgroundColor="#1A3010" 
+                    Stroke="#4A7029"
+                    StrokeThickness="2"
+                    Padding="6"
+                    Margin="0,0,3,0">
+                <VerticalStackLayout Spacing="6">
+                    <Label x:Name="LeftPlayerNameLabel"
+                           Text="Left"
+                           FontSize="11"
+                           FontAttributes="Bold"
+                           TextColor="White"
+                           HorizontalOptions="Center"/>
+                    
+                    <Label x:Name="LeftPlayerRoleLabel"
+                           Text="(Spectator)"
+                           FontSize="9"
+                           TextColor="LightGray"
+                           HorizontalOptions="Center"/>
+                    
+                    <Label x:Name="LeftPlayerTricksLabel"
+                           Text="Tricks: 0"
+                           FontSize="9"
+                           TextColor="LightGray"
+                           HorizontalOptions="Center"/>
+
+                    <!-- Left Player's Hand (Vertical) -->
+                    <CollectionView x:Name="LeftHandCollection"
+                                   VerticalOptions="Start"
+                                   SelectionMode="None">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Vertical" 
+                                             ItemSpacing="2"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BackgroundColor="{Binding BackgroundColor}"
+                                        Stroke="{Binding BorderColor}"
+                                        StrokeThickness="2"
+                                        WidthRequest="60"
+                                        HeightRequest="80"
+                                        Margin="1">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="6"/>
+                                    </Border.StrokeShape>
+                                    <Label Text="{Binding DisplayText}" 
+                                           FontSize="18"
+                                           FontAttributes="Bold"
+                                           TextColor="{Binding TextColor}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- RIGHT PLAYER (Vertical, full height on right side) -->
+            <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
+                    BackgroundColor="#1A3010" 
+                    Stroke="#4A7029"
+                    StrokeThickness="2"
+                    Padding="6"
+                    Margin="3,0,0,0">
+                <VerticalStackLayout Spacing="6">
+                    <Label x:Name="RightPlayerNameLabel"
+                           Text="Right"
+                           FontSize="11"
+                           FontAttributes="Bold"
+                           TextColor="White"
+                           HorizontalOptions="Center"/>
+                    
+                    <Label x:Name="RightPlayerRoleLabel"
+                           Text="(Defender)"
+                           FontSize="9"
+                           TextColor="LightGray"
+                           HorizontalOptions="Center"/>
+                    
+                    <Label x:Name="RightPlayerTricksLabel"
+                           Text="Tricks: 0"
+                           FontSize="9"
+                           TextColor="LightGray"
+                           HorizontalOptions="Center"/>
+
+                    <!-- Right Player's Hand (Vertical) -->
+                    <CollectionView x:Name="RightHandCollection"
+                                   VerticalOptions="Start"
+                                   SelectionMode="None">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Vertical" 
+                                             ItemSpacing="2"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BackgroundColor="{Binding BackgroundColor}"
+                                        Stroke="{Binding BorderColor}"
+                                        StrokeThickness="2"
+                                        WidthRequest="60"
+                                        HeightRequest="80"
+                                        Margin="1">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="6"/>
+                                    </Border.StrokeShape>
+                                    <Label Text="{Binding DisplayText}" 
+                                           FontSize="18"
+                                           FontAttributes="Bold"
+                                           TextColor="{Binding TextColor}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- CENTER: PLAY AREA / TABLE -->
+            <Border Grid.Row="0" Grid.Column="1"
+                    BackgroundColor="#1A3010" 
+                    Stroke="#4A7029"
+                    StrokeThickness="3"
+                    Padding="15"
+                    Margin="3,0,3,3"
+                    VerticalOptions="Fill">
+                <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                    <!-- Trick Status -->
+                    <VerticalStackLayout Grid.Row="0" Spacing="5">
+                        <Label x:Name="TrickStatusLabel"
+                               Text="Trick 0 / 10"
+                               FontSize="16"
+                               FontAttributes="Bold"
+                               TextColor="White"
+                               HorizontalOptions="Center"/>
+                        <Label x:Name="CurrentTurnLabel"
+                               Text="Click 'Start' to begin"
+                               FontSize="14"
+                               TextColor="LightGray"
+                               HorizontalOptions="Center"/>
+                    </VerticalStackLayout>
+
+                    <!-- Trick Cards Display -->
+                    <Grid Grid.Row="1" 
+                          RowDefinitions="*,*"
+                          VerticalOptions="Center"
+                          HorizontalOptions="Center"
+                          RowSpacing="20">
+                        
+                        <!-- Upper Row: Left and Right Player Cards -->
+                        <HorizontalStackLayout Grid.Row="0" 
+                                             Spacing="60"
+                                             HorizontalOptions="Center">
+                            <!-- Left Player Card -->
+                            <VerticalStackLayout Spacing="5">
+                                <Label Text="Left"
+                                       FontSize="11"
+                                       TextColor="LightGray"
+                                       HorizontalOptions="Center"/>
+                                <Border x:Name="LeftPlayedCardBorder"
+                                        BackgroundColor="White"
+                                        Stroke="Gray"
+                                        StrokeThickness="2"
+                                        WidthRequest="80"
+                                        HeightRequest="110"
+                                        IsVisible="False">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="8"/>
+                                    </Border.StrokeShape>
+                                    <Label x:Name="LeftPlayedCardLabel"
+                                           FontSize="32"
+                                           FontAttributes="Bold"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                </Border>
+                            </VerticalStackLayout>
+
+                            <!-- Right Player Card -->
+                            <VerticalStackLayout Spacing="5">
+                                <Label Text="Right"
+                                       FontSize="11"
+                                       TextColor="LightGray"
+                                       HorizontalOptions="Center"/>
+                                <Border x:Name="RightPlayedCardBorder"
+                                        BackgroundColor="White"
+                                        Stroke="Gray"
+                                        StrokeThickness="2"
+                                        WidthRequest="80"
+                                        HeightRequest="110"
+                                        IsVisible="False">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="8"/>
+                                    </Border.StrokeShape>
+                                    <Label x:Name="RightPlayedCardLabel"
+                                           FontSize="32"
+                                           FontAttributes="Bold"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                </Border>
+                            </VerticalStackLayout>
+                        </HorizontalStackLayout>
+
+                        <!-- Lower Row: Bottom Player Card -->
+                        <VerticalStackLayout Grid.Row="1" 
+                                           Spacing="5"
+                                           HorizontalOptions="Center">
+                            <Label Text="You"
+                                   FontSize="11"
+                                   TextColor="LightGray"
+                                   HorizontalOptions="Center"/>
+                            <Border x:Name="BottomPlayedCardBorder"
+                                    BackgroundColor="White"
+                                    Stroke="Blue"
+                                    StrokeThickness="2"
+                                    WidthRequest="80"
+                                    HeightRequest="110"
+                                    IsVisible="False">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8"/>
+                                </Border.StrokeShape>
+                                <Label x:Name="BottomPlayedCardLabel"
+                                       FontSize="32"
+                                       FontAttributes="Bold"
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center"/>
+                            </Border>
+                        </VerticalStackLayout>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- BOTTOM PLAYER (Horizontal, full width at bottom) -->
+            <Border Grid.Row="1" Grid.Column="1"
+                    BackgroundColor="#1A3010" 
+                    Stroke="#4A7029"
+                    StrokeThickness="2"
+                    Padding="10"
+                    Margin="3,0,3,0">
+                <VerticalStackLayout Spacing="8">
+                    <HorizontalStackLayout HorizontalOptions="Center" Spacing="15">
+                        <Label Text="Your Hand" 
+                               FontSize="14" 
+                               FontAttributes="Bold"
+                               TextColor="White"/>
+                        <Label x:Name="BottomPlayerRoleLabel"
+                               Text="(Declarer)"
+                               FontSize="12"
+                               TextColor="LightGray"/>
+                        <Label x:Name="BottomPlayerTricksLabel"
+                               Text="Tricks: 0"
+                               FontSize="12"
+                               TextColor="LightGray"/>
+                    </HorizontalStackLayout>
+
+                    <!-- Bottom Player's Hand (Horizontal, clickable) -->
+                    <CollectionView x:Name="BottomHandCollection"
+                                   HeightRequest="120"
+                                   HorizontalOptions="Center"
+                                   SelectionMode="None">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Horizontal" 
+                                             ItemSpacing="4"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BackgroundColor="White"
+                                        Stroke="{Binding BorderColor}"
+                                        StrokeThickness="{Binding BorderThickness}"
+                                        WidthRequest="70"
+                                        HeightRequest="95"
+                                        Margin="2">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="8"/>
+                                    </Border.StrokeShape>
+                                    <Label Text="{Binding DisplayText}" 
+                                           FontSize="24"
+                                           FontAttributes="Bold"
+                                           TextColor="{Binding TextColor}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnBottomPlayerCardTapped"
+                                                            CommandParameter="{Binding .}"/>
+                                    </Border.GestureRecognizers>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- RIGHT COLUMN: Control Panel (unchanged) -->
+        <Border Grid.Column="1"
+                BackgroundColor="#1A3010"
+                Stroke="#4A7029"
+                StrokeThickness="2"
+                Padding="12"
+                Margin="5,0,0,0">
+            <ScrollView>
+                <VerticalStackLayout Spacing="12">
+
+                    <!-- ========== ANALYZE MODE SECTION ========== -->
+                    <Label Text="AI Analyze Mode"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <Button x:Name="AnalyzeButton"
+                            Text="Analyze Best Move"
+                            Clicked="OnAnalyzeClicked"
+                            BackgroundColor="#9C27B0"
+                            TextColor="White"
+                            FontSize="12"
+                            HeightRequest="36"/>
+
+                    <!-- Analysis Results Panel -->
+                    <Border x:Name="AnalysisResultsPanel"
+                            BackgroundColor="#2A1A30"
+                            Stroke="#7B1FA2"
+                            StrokeThickness="2"
+                            Padding="10"
+                            IsVisible="False">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Analysis Results"
+                                   FontSize="12"
+                                   FontAttributes="Bold"
+                                   TextColor="#CE93D8"/>
+                            
+                            <Label x:Name="AnalysisStatusLabel"
+                                   FontSize="11"
+                                   TextColor="White"
+                                   LineBreakMode="WordWrap"/>
+                            
+                            <Label x:Name="AnalysisRecommendedCardLabel"
+                                   FontSize="11"
+                                   TextColor="#FFD54F"
+                                   LineBreakMode="WordWrap"
+                                   IsVisible="False"/>
+                            
+                            <Label x:Name="AnalysisExpectedTricksLabel"
+                                   FontSize="11"
+                                   TextColor="#81C784"
+                                   LineBreakMode="WordWrap"
+                                   IsVisible="False"/>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <BoxView HeightRequest="2" Color="#4A7029" Margin="0,5"/>
+
+                    <!-- Game Controls -->
+                    <Label Text="Game Controls"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0"
+                                x:Name="StartButton"
+                                Text="Start"
+                                Clicked="OnStartClicked"
+                                BackgroundColor="#4CAF50"
+                                TextColor="White"
+                                FontSize="12"
+                                HeightRequest="36"/>
+                        
+                        <Button Grid.Column="1"
+                                x:Name="NextButton"
+                                Text="Next"
+                                Clicked="OnNextClicked"
+                                BackgroundColor="#FF9800"
+                                TextColor="White"
+                                FontSize="12"
+                                HeightRequest="36"
+                                IsEnabled="False"/>
+                    </Grid>
+
+                    <BoxView HeightRequest="2" Color="#4A7029" Margin="0,5"/>
+
+                    <!-- Contract Settings -->
+                    <Label Text="Contract Settings"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <Label Text="Contract Type"
+                           FontSize="11"
+                           TextColor="White"/>
+                    <Picker x:Name="ContractTypePicker"
+                            BackgroundColor="White"
+                            TextColor="Black"
+                            FontSize="11"
+                            SelectedIndex="2">
+                        <Picker.Items>
+                            <x:String>Trump</x:String>
+                            <x:String>Betl</x:String>
+                            <x:String>Sans</x:String>
+                        </Picker.Items>
+                    </Picker>
+
+                    <Label Text="Trump Suit (if Trump)"
+                           FontSize="11"
+                           TextColor="White"
+                           Margin="0,5,0,0"/>
+                    <Picker x:Name="TrumpSuitPicker"
+                            BackgroundColor="White"
+                            TextColor="Black"
+                            FontSize="11"
+                            SelectedIndex="0">
+                        <Picker.Items>
+                            <x:String>♠ Spades</x:String>
+                            <x:String>♦ Diamonds</x:String>
+                            <x:String>♥ Hearts</x:String>
+                            <x:String>♣ Clubs</x:String>
+                        </Picker.Items>
+                    </Picker>
+
+                    <BoxView HeightRequest="2" Color="#4A7029" Margin="0,5"/>
+
+                    <!-- Role Assignment -->
+                    <Label Text="Role Assignment"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="5">
+                        <Label Grid.Row="0" Grid.Column="0" Text="You (Bottom):" FontSize="11" TextColor="White" VerticalOptions="Center"/>
+                        <Picker Grid.Row="0" Grid.Column="1" x:Name="BottomRolePicker" BackgroundColor="White" TextColor="Black" FontSize="11" SelectedIndex="0">
+                            <Picker.Items>
+                                <x:String>Declarer</x:String>
+                                <x:String>Defender</x:String>
+                                <x:String>Partner</x:String>
+                                <x:String>Spectator</x:String>
+                            </Picker.Items>
+                        </Picker>
+
+                        <Label Grid.Row="1" Grid.Column="0" Text="Left Player:" FontSize="11" TextColor="White" VerticalOptions="Center"/>
+                        <Picker Grid.Row="1" Grid.Column="1" x:Name="LeftRolePicker" BackgroundColor="White" TextColor="Black" FontSize="11" SelectedIndex="3">
+                            <Picker.Items>
+                                <x:String>Declarer</x:String>
+                                <x:String>Defender</x:String>
+                                <x:String>Partner</x:String>
+                                <x:String>Spectator</x:String>
+                            </Picker.Items>
+                        </Picker>
+
+                        <Label Grid.Row="2" Grid.Column="0" Text="Right Player:" FontSize="11" TextColor="White" VerticalOptions="Center"/>
+                        <Picker Grid.Row="2" Grid.Column="1" x:Name="RightRolePicker" BackgroundColor="White" TextColor="Black" FontSize="11" SelectedIndex="1">
+                            <Picker.Items>
+                                <x:String>Declarer</x:String>
+                                <x:String>Defender</x:String>
+                                <x:String>Partner</x:String>
+                                <x:String>Spectator</x:String>
+                            </Picker.Items>
+                        </Picker>
+                    </Grid>
+
+                    <BoxView HeightRequest="2" Color="#4A7029" Margin="0,5"/>
+
+                    <!-- Game Settings -->
+                    <Label Text="Game Settings"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <Label Text="Cards Per Player"
+                           FontSize="11"
+                           TextColor="White"/>
+                    <Grid ColumnDefinitions="*,80" ColumnSpacing="8">
+                        <Slider Grid.Column="0"
+                                x:Name="CardsPerPlayerSlider"
+                                Minimum="1"
+                                Maximum="10"
+                                Value="10"
+                                MinimumTrackColor="#4CAF50"
+                                MaximumTrackColor="#888"
+                                ThumbColor="White"
+                                ValueChanged="OnCardsPerPlayerChanged"/>
+                        <Label Grid.Column="1"
+                               x:Name="CardsPerPlayerLabel"
+                               Text="10 cards"
+                               FontSize="11"
+                               TextColor="White"
+                               VerticalOptions="Center"
+                               HorizontalOptions="End"/>
+                    </Grid>
+
+                    <Label Text="Card Visibility"
+                           FontSize="11"
+                           TextColor="White"
+                           Margin="0,5,0,0"/>
+                    <Picker x:Name="VisibilityModePicker"
+                            BackgroundColor="White"
+                            TextColor="Black"
+                            FontSize="11"
+                            SelectedIndex="0"
+                            SelectedIndexChanged="OnVisibilityModeChanged">
+                        <Picker.Items>
+                            <x:String>Perfect Play (All Visible)</x:String>
+                            <x:String>Regular (Opponents Hidden)</x:String>
+                        </Picker.Items>
+                    </Picker>
+
+                    <BoxView HeightRequest="2" Color="#4A7029" Margin="0,5"/>
+
+                    <!-- Talon Section (2 extra cards) -->
+                    <Label Text="Talon (Extra 2 Cards)"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <HorizontalStackLayout x:Name="TalonCardsStack"
+                                          Spacing="5"
+                                          HorizontalOptions="Center">
+                        <!-- Talon cards will be added dynamically -->
+                    </HorizontalStackLayout>
+
+                    <BoxView HeightRequest="2" Color="#4A7029" Margin="0,5"/>
+
+                    <!-- Trick Results -->
+                    <Label Text="Trick Results"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <Grid ColumnDefinitions="*,80" RowDefinitions="Auto,Auto,Auto" RowSpacing="5">
+                        <Label Grid.Row="0" Grid.Column="0" Text="You (Bottom):" FontSize="11" TextColor="White"/>
+                        <Label Grid.Row="0" Grid.Column="1" x:Name="BottomTrickCountLabel" Text="0 tricks" FontSize="11" TextColor="LightGreen" HorizontalOptions="End"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Text="Left Player:" FontSize="11" TextColor="White"/>
+                        <Label Grid.Row="1" Grid.Column="1" x:Name="LeftTrickCountLabel" Text="0 tricks" FontSize="11" TextColor="LightGray" HorizontalOptions="End"/>
+
+                        <Label Grid.Row="2" Grid.Column="0" Text="Right Player:" FontSize="11" TextColor="White"/>
+                        <Label Grid.Row="2" Grid.Column="1" x:Name="RightTrickCountLabel" Text="0 tricks" FontSize="11" TextColor="LightCoral" HorizontalOptions="End"/>
+                    </Grid>
+
+                    <BoxView HeightRequest="2" Color="#4A7029" Margin="0,5"/>
+
+                    <!-- Game Log -->
+                    <Label Text="Game Log"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+
+                    <Border BackgroundColor="#0F1F0A"
+                            Stroke="#4A7029"
+                            StrokeThickness="1"
+                            Padding="8"
+                            HeightRequest="200">
+                        <ScrollView x:Name="LogScrollView">
+                            <Label x:Name="GameLogLabel"
+                                   FontSize="10"
+                                   TextColor="LightGray"
+                                   LineBreakMode="WordWrap"/>
+                        </ScrollView>
+                    </Border>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

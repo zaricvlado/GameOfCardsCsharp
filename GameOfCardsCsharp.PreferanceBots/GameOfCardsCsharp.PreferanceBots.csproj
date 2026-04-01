@@ -60,7 +60,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <MauiXaml Update="SansPage.xaml">
+	  <MauiXaml Update="PreferancePage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	</ItemGroup>

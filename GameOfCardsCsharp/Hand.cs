@@ -22,6 +22,10 @@ namespace GameOfCardsCsharp
                 cards.RemoveAt(index);
             }
         }
+        public void RemoveCard(Card card)
+        {
+            cards.Remove(card);
+        }
 
         public void Clear()
         {
@@ -40,6 +44,24 @@ namespace GameOfCardsCsharp
         public void SortBySuit()
         {
             cards.Sort((a, b) => a.Suit.CompareTo(b.Suit));
+        }
+
+        /// <summary>
+        /// Sorts cards by suit, then by rank in descending order (high cards first).
+        /// Suits are ordered: Clubs, Diamonds, Hearts, Spades.
+        /// Within each suit: Ace, King, Queen, Jack, 10, 9, 8, 7.
+        /// </summary>
+        public void SortBySuitThenRankDescending()
+        {
+            cards.Sort((a, b) =>
+            {
+                // First compare by suit
+                if (a.Suit != b.Suit)
+                    return a.Suit.CompareTo(b.Suit);
+                
+                // Same suit - compare by rank descending (higher rank first)
+                return b.Rank.CompareTo(a.Rank);
+            });
         }
 
         public void SortBySuitThenRank(GameRules rules)
