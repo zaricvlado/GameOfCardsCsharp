@@ -41,35 +41,76 @@
                            TextColor="LightGray"
                            HorizontalOptions="Center"/>
 
-                    <!-- Left Player's Hand (Vertical) -->
-                    <CollectionView x:Name="LeftHandCollection"
-                                   VerticalOptions="Start"
-                                   SelectionMode="None">
-                        <CollectionView.ItemsLayout>
-                            <LinearItemsLayout Orientation="Vertical" 
-                                             ItemSpacing="2"/>
-                        </CollectionView.ItemsLayout>
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate>
-                                <Border BackgroundColor="{Binding BackgroundColor}"
-                                        Stroke="{Binding BorderColor}"
-                                        StrokeThickness="2"
-                                        WidthRequest="60"
-                                        HeightRequest="80"
-                                        Margin="1">
-                                    <Border.StrokeShape>
-                                        <RoundRectangle CornerRadius="6"/>
-                                    </Border.StrokeShape>
-                                    <Label Text="{Binding DisplayText}" 
-                                           FontSize="18"
-                                           FontAttributes="Bold"
-                                           TextColor="{Binding TextColor}"
-                                           HorizontalOptions="Center"
-                                           VerticalOptions="Center"/>
-                                </Border>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                    <!-- Left Player's Hand (Vertical) - SCROLLABLE -->
+                    <ScrollView VerticalScrollBarVisibility="Always"
+                                VerticalOptions="FillAndExpand">
+                        <VerticalStackLayout x:Name="LeftHandCollection"
+                                           Spacing="-50"
+                                           Padding="0,0,0,80"
+                                           BindableLayout.ItemsSource="{Binding}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BackgroundColor="{Binding BackgroundColor}"
+                                            Stroke="{Binding BorderColor}"
+                                            StrokeThickness="2.5"
+                                            WidthRequest="80"
+                                            HeightRequest="100"
+                                            Margin="1">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="6"/>
+                                        </Border.StrokeShape>
+                                        <Grid RowDefinitions="Auto,*,Auto" Padding="4">
+                                            <!-- Top Left: Rank and Suit -->
+                                            <VerticalStackLayout Grid.Row="0"
+                                                               HorizontalOptions="Start"
+                                                               VerticalOptions="Start"
+                                                               Spacing="0">
+                                                <Label Text="{Binding RankText}" 
+                                                       FontSize="16"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"/>
+                                                <Label Text="{Binding SuitSymbol}" 
+                                                       FontSize="14"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"
+                                                       Margin="0,-3,0,0"/>
+                                            </VerticalStackLayout>
+                                            
+                                            <!-- Center: Large Suit Symbol (optional) -->
+                                            <Label Grid.Row="1"
+                                                   Text="{Binding SuitSymbol}"
+                                                   FontSize="28"
+                                                   FontAttributes="Bold"
+                                                   TextColor="{Binding TextColor}"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center"
+                                                   Opacity="0.3"/>
+                                            
+                                            <!-- Bottom Right: Rank and Suit (upside down effect) -->
+                                            <VerticalStackLayout Grid.Row="2"
+                                                               HorizontalOptions="End"
+                                                               VerticalOptions="End"
+                                                               Spacing="0">
+                                                <Label Text="{Binding SuitSymbol}" 
+                                                       FontSize="14"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"
+                                                       Margin="0,0,0,-3"/>
+                                                <Label Text="{Binding RankText}" 
+                                                       FontSize="16"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"/>
+                                            </VerticalStackLayout>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </ScrollView>
                 </VerticalStackLayout>
             </Border>
 
@@ -100,35 +141,76 @@
                            TextColor="LightGray"
                            HorizontalOptions="Center"/>
 
-                    <!-- Right Player's Hand (Vertical) -->
-                    <CollectionView x:Name="RightHandCollection"
-                                   VerticalOptions="Start"
-                                   SelectionMode="None">
-                        <CollectionView.ItemsLayout>
-                            <LinearItemsLayout Orientation="Vertical" 
-                                             ItemSpacing="2"/>
-                        </CollectionView.ItemsLayout>
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate>
-                                <Border BackgroundColor="{Binding BackgroundColor}"
-                                        Stroke="{Binding BorderColor}"
-                                        StrokeThickness="2"
-                                        WidthRequest="60"
-                                        HeightRequest="80"
-                                        Margin="1">
-                                    <Border.StrokeShape>
-                                        <RoundRectangle CornerRadius="6"/>
-                                    </Border.StrokeShape>
-                                    <Label Text="{Binding DisplayText}" 
-                                           FontSize="18"
-                                           FontAttributes="Bold"
-                                           TextColor="{Binding TextColor}"
-                                           HorizontalOptions="Center"
-                                           VerticalOptions="Center"/>
-                                </Border>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                    <!-- Right Player's Hand (Vertical) - SCROLLABLE -->
+                    <ScrollView VerticalScrollBarVisibility="Always"
+                                VerticalOptions="FillAndExpand">
+                        <VerticalStackLayout x:Name="RightHandCollection"
+                                           Spacing="-50"
+                                           Padding="0,0,0,80"
+                                           BindableLayout.ItemsSource="{Binding}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BackgroundColor="{Binding BackgroundColor}"
+                                            Stroke="{Binding BorderColor}"
+                                            StrokeThickness="2.5"
+                                            WidthRequest="80"
+                                            HeightRequest="100"
+                                            Margin="1">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="6"/>
+                                        </Border.StrokeShape>
+                                        <Grid RowDefinitions="Auto,*,Auto" Padding="4">
+                                            <!-- Top Left: Rank and Suit -->
+                                            <VerticalStackLayout Grid.Row="0"
+                                                               HorizontalOptions="Start"
+                                                               VerticalOptions="Start"
+                                                               Spacing="0">
+                                                <Label Text="{Binding RankText}" 
+                                                       FontSize="16"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"/>
+                                                <Label Text="{Binding SuitSymbol}" 
+                                                       FontSize="14"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"
+                                                       Margin="0,-3,0,0"/>
+                                            </VerticalStackLayout>
+                                            
+                                            <!-- Center: Large Suit Symbol (optional) -->
+                                            <Label Grid.Row="1"
+                                                   Text="{Binding SuitSymbol}"
+                                                   FontSize="28"
+                                                   FontAttributes="Bold"
+                                                   TextColor="{Binding TextColor}"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center"
+                                                   Opacity="0.3"/>
+                                            
+                                            <!-- Bottom Right: Rank and Suit (upside down effect) -->
+                                            <VerticalStackLayout Grid.Row="2"
+                                                               HorizontalOptions="End"
+                                                               VerticalOptions="End"
+                                                               Spacing="0">
+                                                <Label Text="{Binding SuitSymbol}" 
+                                                       FontSize="14"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"
+                                                       Margin="0,0,0,-3"/>
+                                                <Label Text="{Binding RankText}" 
+                                                       FontSize="16"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{Binding TextColor}"
+                                                       LineBreakMode="NoWrap"/>
+                                            </VerticalStackLayout>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </ScrollView>
                 </VerticalStackLayout>
             </Border>
 

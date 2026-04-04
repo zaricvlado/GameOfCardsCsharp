@@ -6,6 +6,169 @@ using System.Threading.Tasks;
 
 namespace GameOfCardsCsharp.Preferance.Common
 {
+
+    /// <summary>
+    /// Represents the score in a 2-player Sans game
+    /// </summary>
+    public readonly struct Score2
+    {
+        /// <summary>
+        /// Number of tricks won by each player [Player0, Player1]
+        /// </summary>
+        public int[] TricksWon { get; }
+
+        public Score2(int player0Tricks, int player1Tricks)
+        {
+            TricksWon = new[] { player0Tricks, player1Tricks };
+        }
+
+        public Score2(int[] tricksWon)
+        {
+            if (tricksWon == null || tricksWon.Length != 2)
+            {
+                throw new ArgumentException("Must provide exactly 2 values", nameof(tricksWon));
+            }
+            TricksWon = new int[2];
+            Array.Copy(tricksWon, TricksWon, 2);
+        }
+
+        /// <summary>
+        /// Adds trick results to current score
+        /// </summary>
+        public Score2 Add(Score2 other)
+        {
+            return new Score2(
+                TricksWon[0] + other.TricksWon[0],
+                TricksWon[1] + other.TricksWon[1]
+            );
+        }
+
+        /// <summary>
+        /// Increments the trick count for a specific player
+        /// </summary>
+        public Score2 IncrementPlayer(int playerIndex)
+        {
+            var newTricks = new int[2];
+            Array.Copy(TricksWon, newTricks, 2);
+            newTricks[playerIndex]++;
+            return new Score2(newTricks);
+        }
+
+        public override string ToString()
+        {
+            return $"P0:{TricksWon[0]} P1:{TricksWon[1]}";
+        }
+    }
+
+    /// <summary>
+    /// Represents the score in a 2 or 3-player Preferance game.
+    /// Tracks both coalition scores (Declarer vs Defenders) and individual trick counts.
+    /// </summary>
+    public readonly struct Score3
+    {
+        /// <summary>
+        /// Total tricks won by declarer(s)
+        /// </summary>
+        public int DeclarerTricks { get; }
+
+        /// <summary>
+        /// Total tricks won by defender(s)
+        /// </summary>
+        public int DefendersTricks { get; }
+
+        /// <summary>
+        /// Individual trick counts for each player [Player0, Player1, Player2]
+        /// For 2-player games: Player2's count is 0
+        /// </summary>
+        public int[] IndividualTricks { get; }
+
+        public Score3(int declarerTricks, int defendersTricks, int[] individualTricks)
+        {
+            DeclarerTricks = declarerTricks;
+            DefendersTricks = defendersTricks;
+
+            if (individualTricks == null || (individualTricks.Length != 2 && individualTricks.Length != 3))
+            {
+                throw new ArgumentException("IndividualTricks must have 2 or 3 elements", nameof(individualTricks));
+            }
+
+            IndividualTricks = new int[3];
+            Array.Copy(individualTricks, IndividualTricks, individualTricks.Length);
+
+            // Validation
+            if (DeclarerTricks + DefendersTricks != individualTricks.Sum())
+            {
+                throw new ArgumentException("DeclarerTricks + DefendersTricks must equal sum of IndividualTricks");
+            }
+        }
+
+        /// <summary>
+        /// Creates Score3 from a 2-player game
+        /// </summary>
+        public static Score3 FromTwoPlayer(int player0Tricks, int player1Tricks, int declarerIndex)
+        {
+            var individual = new int[3];
+            individual[0] = player0Tricks;
+            individual[1] = player1Tricks;
+            individual[2] = 0;
+
+            var declarerTricks = declarerIndex == 0 ? player0Tricks : player1Tricks;
+            var defendersTricks = declarerIndex == 0 ? player1Tricks : player0Tricks;
+
+            return new Score3(declarerTricks, defendersTricks, individual);
+        }
+
+        /// <summary>
+        /// Creates Score3 from a 3-player game
+        /// </summary>
+        public static Score3 FromThreePlayer(int[] individualTricks, int declarerIndex)
+        {
+            if (individualTricks == null || individualTricks.Length != 3)
+            {
+                throw new ArgumentException("Must provide exactly 3 trick counts", nameof(individualTricks));
+            }
+
+            var declarerTricks = individualTricks[declarerIndex];
+            var defendersTricks = individualTricks.Sum() - declarerTricks;
+
+            return new Score3(declarerTricks, defendersTricks, individualTricks);
+        }
+
+        /// <summary>
+        /// Increments the trick count for a specific player
+        /// </summary>
+        public Score3 IncrementPlayer(int playerIndex, int declarerIndex)
+        {
+            var newIndividual = new int[3];
+            Array.Copy(IndividualTricks, newIndividual, 3);
+            newIndividual[playerIndex]++;
+
+            return FromThreePlayer(newIndividual, declarerIndex);
+        }
+
+        /// <summary>
+        /// Adds two scores together
+        /// </summary>
+        public Score3 Add(Score3 other)
+        {
+            var newIndividual = new int[3];
+            for (int i = 0; i < 3; i++)
+            {
+                newIndividual[i] = IndividualTricks[i] + other.IndividualTricks[i];
+            }
+
+            return new Score3(
+                DeclarerTricks + other.DeclarerTricks,
+                DefendersTricks + other.DefendersTricks,
+                newIndividual);
+        }
+
+        public override string ToString()
+        {
+            return $"Declarer:{DeclarerTricks} Defenders:{DefendersTricks} " +
+                   $"[P0:{IndividualTricks[0]} P1:{IndividualTricks[1]} P2:{IndividualTricks[2]}]";
+        }
+    }
     /// <summary>
     /// Represents a perfect information game state where all cards are known.
     /// Cards are organized by suit and sorted by rank for efficient analysis.
@@ -16,6 +179,11 @@ namespace GameOfCardsCsharp.Preferance.Common
         /// The game mode (Sans, Trump, or Betl)
         /// </summary>
         public PreferanceGameMode GameMode { get; }
+
+        /// <summary>
+        /// The trump suit (TrumpSuit.None for Sans and Betl games)
+        /// </summary>
+        public TrumpSuit TrumpSuit { get; }
 
         /// <summary>
         /// List of players in the game
@@ -40,9 +208,10 @@ namespace GameOfCardsCsharp.Preferance.Common
         /// </summary>
         public List<List<PerfectCardMove>> Moves { get; }
 
-        public PerfPerfectGameState(PreferanceGameMode gameMode, List<string> players, int currentPlayerIndex = 0, int leaderPlayerIndex = 0)
+        public PerfPerfectGameState(PreferanceGameMode gameMode, List<string> players, TrumpSuit trumpSuit = TrumpSuit.None, int currentPlayerIndex = 0, int leaderPlayerIndex = 0)
         {
             GameMode = gameMode;
+            TrumpSuit = trumpSuit;
             Players = players ?? throw new ArgumentNullException(nameof(players));
             CurrentPlayerIndex = currentPlayerIndex;
             LeaderPlayerIndex = leaderPlayerIndex;

@@ -5,33 +5,55 @@ using System.Text;
 using System.Threading.Tasks;
 using GameOfCardsCsharp.Preferance.Common;
 
-namespace GameOfCardsCsharp.Preferance.Sans
+namespace GameOfCardsCsharp.Preferance.Trump
 {
     /// <summary>
-    /// Perfect information game for 2-player Sans (no-trump).
+    /// Perfect information game for 2-player Trump.
     /// Uses recursive evaluation to determine optimal moves.
     /// </summary>
-    public class Sans2PerfectGame
+    public class Trump2PerfectGame
     {
         private readonly PerfPerfectGameState _state;
+        private readonly Suit _trumpSuit;
         private bool _exploreAllOptions;
 
         public PerfPerfectGameState State => _state;
 
-        public Sans2PerfectGame(PerfPerfectGameState state)
+        public Trump2PerfectGame(PerfPerfectGameState state)
         {
             if (state.Players.Count != 2)
             {
-                throw new ArgumentException("SansPerfectGame only supports 2 players", nameof(state));
+                throw new ArgumentException("Trump2PerfectGame only supports 2 players", nameof(state));
             }
 
-            if (state.GameMode != PreferanceGameMode.Sans)
+            if (state.GameMode != PreferanceGameMode.Trump)
             {
-                throw new ArgumentException("SansPerfectGame requires Sans game mode", nameof(state));
+                throw new ArgumentException("Trump2PerfectGame requires Trump game mode", nameof(state));
+            }
+
+            if (state.TrumpSuit == TrumpSuit.None)
+            {
+                throw new ArgumentException("Trump suit must be specified for Trump games", nameof(state));
             }
 
             _state = state;
+            _trumpSuit = ConvertTrumpSuitToSuit(state.TrumpSuit);
             _exploreAllOptions = false;
+        }
+
+        /// <summary>
+        /// Converts TrumpSuit enum to Suit enum
+        /// </summary>
+        private static Suit ConvertTrumpSuitToSuit(TrumpSuit trumpSuit)
+        {
+            return trumpSuit switch
+            {
+                TrumpSuit.Spades => Suit.Spades,
+                TrumpSuit.Diamonds => Suit.Diamonds,
+                TrumpSuit.Hearts => Suit.Hearts,
+                TrumpSuit.Clubs => Suit.Clubs,
+                _ => throw new ArgumentException($"Invalid trump suit: {trumpSuit}")
+            };
         }
 
         /// <summary>
@@ -158,7 +180,23 @@ namespace GameOfCardsCsharp.Preferance.Sans
                 return followMove.WithExpectedTricks(expectedScore.TricksWon);
             }
 
-            // Cannot follow suit - evaluate all discard candidates and pick the best
+            // Cannot follow suit - check if we must play trump
+            if (leadMove.Card.Suit != _trumpSuit)
+            {
+                // Lead suit is not trump - must play trump if available
+                var trumpMoves = _state.Moves[(int)_trumpSuit];
+                var trumpMove = FindSmallestCardInSuit(trumpMoves, currentPlayer);
+                
+                if (trumpMove != null)
+                {
+                    // Must play smallest trump
+                    int handsLeft = CountRemainingHands();
+                    Score2 expectedScore = CalculateFollowScore(leadMove, trumpMove, handsLeft);
+                    return trumpMove.WithExpectedTricks(expectedScore.TricksWon);
+                }
+            }
+
+            // Cannot follow suit and no trump available - evaluate all discard candidates and pick the best
             var discardCandidates = FindBestDiscard(leadMove.Card.Suit, currentPlayer);
             return EvaluateBestDiscard(leadMove, discardCandidates);
         }
@@ -367,10 +405,10 @@ namespace GameOfCardsCsharp.Preferance.Sans
 
             int otherPlayer = (currentPlayer + 1) % 2;
 
-            // Evaluate each suit (except the lead suit)
+            // Evaluate each suit (except the lead suit and trump suit)
             for (int suitIndex = 0; suitIndex < _state.Moves.Count; suitIndex++)
             {
-                if (suitIndex == (int)leadSuit)
+                if (suitIndex == (int)leadSuit || suitIndex == (int)_trumpSuit)
                     continue;
 
                 var suitMoves = _state.Moves[suitIndex];
@@ -547,7 +585,20 @@ namespace GameOfCardsCsharp.Preferance.Sans
                 return followMoves;
             }
 
-            // Cannot follow suit - return discard candidates
+            // Cannot follow suit - check if must play trump
+            if (leadMove.Card.Suit != _trumpSuit)
+            {
+                var trumpMoves = _state.Moves[(int)_trumpSuit];
+                var trumpMove = FindSmallestCardInSuit(trumpMoves, currentPlayer);
+                
+                if (trumpMove != null)
+                {
+                    // Must play smallest trump - return as single-item list
+                    return new List<PerfectCardMove> { trumpMove };
+                }
+            }
+
+            // Cannot follow suit and no trump available - return discard candidates
             return FindBestDiscard(leadMove.Card.Suit, currentPlayer);
         }
 
@@ -682,19 +733,43 @@ namespace GameOfCardsCsharp.Preferance.Sans
         }
 
         /// <summary>
-        /// Determines the winner between two moves in Sans (no-trump).
-        /// Must follow suit; highest rank in lead suit wins.
+        /// Determines the winner between two moves in Trump game.
+        /// Trump cards beat non-trump cards. Highest trump wins if multiple trumps.
+        /// If no trumps, highest card in lead suit wins.
         /// </summary>
         private int GetWinner(PerfectCardMove leadMove, PerfectCardMove followMove)
         {
-            // In Sans (no trump), must follow suit
+            bool leadIsTrump = leadMove.Card.Suit == _trumpSuit;
+            bool followIsTrump = followMove.Card.Suit == _trumpSuit;
+
+            // Both cards are trump - highest rank wins
+            if (leadIsTrump && followIsTrump)
+            {
+                return leadMove.Card.Rank > followMove.Card.Rank 
+                    ? leadMove.PlayerIndex 
+                    : followMove.PlayerIndex;
+            }
+
+            // Follow card is trump, lead is not - follow wins
+            if (followIsTrump && !leadIsTrump)
+            {
+                return followMove.PlayerIndex;
+            }
+
+            // Lead card is trump, follow is not - lead wins
+            if (leadIsTrump && !followIsTrump)
+            {
+                return leadMove.PlayerIndex;
+            }
+
+            // Neither is trump - must follow suit
             if (followMove.Card.Suit != leadMove.Card.Suit)
             {
                 // Follower couldn't follow suit - leader wins
                 return leadMove.PlayerIndex;
             }
 
-            // Same suit - highest rank wins
+            // Same suit (non-trump) - highest rank wins
             return leadMove.Card.Rank > followMove.Card.Rank 
                 ? leadMove.PlayerIndex 
                 : followMove.PlayerIndex;

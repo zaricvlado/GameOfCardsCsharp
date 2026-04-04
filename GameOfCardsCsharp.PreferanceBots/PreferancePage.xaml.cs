@@ -5,6 +5,7 @@ using Microsoft.Maui.Controls.Shapes;
 using GameOfCardsCsharp.Preferance.GamePlay;
 using GameOfCardsCsharp.Preferance;
 using GameOfCardsCsharp.Preferance.Sans;
+using GameOfCardsCsharp.Preferance.Trump;
 using GameOfCardsCsharp.Preferance.Common;
 
 namespace GameOfCardsCsharp.PreferanceBots
@@ -43,10 +44,12 @@ namespace GameOfCardsCsharp.PreferanceBots
         {
             InitializeComponent();
 
-            // Bind collections
+            // Bottom player: CollectionView - use ItemsSource property
             BottomHandCollection.ItemsSource = bottomHandDisplay;
-            LeftHandCollection.ItemsSource = leftHandDisplay;
-            RightHandCollection.ItemsSource = rightHandDisplay;
+            
+            // Left & Right players: VerticalStackLayout - use BindableLayout
+            BindableLayout.SetItemsSource(LeftHandCollection, leftHandDisplay);
+            BindableLayout.SetItemsSource(RightHandCollection, rightHandDisplay);
 
             // Initialize players
             _players = new Dictionary<int, PreferancePlayer>
@@ -247,7 +250,7 @@ namespace GameOfCardsCsharp.PreferanceBots
 
             Card selectedCard;
 
-            // Try to use perfect play for 2-player Sans games
+            // Try to use perfect play for 2-player Sans/Trump games
             if (CanUsePerfectPlay())
             {
                 try
@@ -814,7 +817,7 @@ namespace GameOfCardsCsharp.PreferanceBots
         // ==================== PERFECT PLAY HELPERS ====================
 
         /// <summary>
-        /// Checks if perfect play can be used (2-player Sans game)
+        /// Checks if perfect play can be used (2-player Sans or Trump game)
         /// </summary>
         private bool CanUsePerfectPlay()
         {
@@ -824,13 +827,38 @@ namespace GameOfCardsCsharp.PreferanceBots
             var contractType = GetContractType();
             var activePlayers = GetActivePlayerIds();
 
-            return contractType == ContractType.Sans && activePlayers.Count == 2;
+            return (contractType == ContractType.Sans || contractType == ContractType.Trump) && activePlayers.Count == 2;
         }
 
         /// <summary>
-        /// Gets the optimal card using Sans2PerfectGame
+        /// Gets the optimal card using Sans2PerfectGame or Trump2PerfectGame
         /// </summary>
         private Card GetPerfectPlayCard(int playerId)
+        {
+            if (_gamePlayEngine == null)
+                throw new InvalidOperationException("Game engine not initialized");
+
+            var contractType = GetContractType();
+
+            // Route to appropriate perfect game implementation
+            if (contractType == ContractType.Sans)
+            {
+                return GetSansPerfectPlayCard(playerId);
+            }
+            else if (contractType == ContractType.Trump)
+            {
+                return GetTrumpPerfectPlayCard(playerId);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Perfect play not supported for {contractType}");
+            }
+        }
+
+        /// <summary>
+        /// Gets the optimal card for Sans games using Sans2PerfectGame
+        /// </summary>
+        private Card GetSansPerfectPlayCard(int playerId)
         {
             if (_gamePlayEngine == null)
                 throw new InvalidOperationException("Game engine not initialized");
@@ -850,7 +878,7 @@ namespace GameOfCardsCsharp.PreferanceBots
             var isLeader = tableCards.Count == 0;
 
             // Create game state
-            var gameState = CreatePerfectGameState(playerId, activePlayers, playerIdMap, tableCards);
+            var gameState = CreatePerfectGameState(playerId, activePlayers, playerIdMap, tableCards, TrumpSuit.None);
 
             // Create Sans2PerfectGame and get best move
             var sansGame = new Sans2PerfectGame(gameState);
@@ -869,19 +897,76 @@ namespace GameOfCardsCsharp.PreferanceBots
         }
 
         /// <summary>
+        /// Gets the optimal card for Trump games using Trump2PerfectGame
+        /// </summary>
+        private Card GetTrumpPerfectPlayCard(int playerId)
+        {
+            if (_gamePlayEngine == null)
+                throw new InvalidOperationException("Game engine not initialized");
+
+            // Get trump suit
+            var trumpSuit = GetTrumpSuitEnum();
+            if (trumpSuit == null)
+                throw new InvalidOperationException("Trump suit not specified for Trump game");
+
+            // Get active players
+            var activePlayers = GetActivePlayerIds();
+            
+            // Map player IDs to 0 and 1 for Trump2PerfectGame
+            var playerIdMap = new Dictionary<int, int>();
+            for (int i = 0; i < activePlayers.Count; i++)
+            {
+                playerIdMap[activePlayers[i]] = i;
+            }
+
+            // Check if current player is the leader
+            var tableCards = _gamePlayEngine.GetTableCards();
+            var isLeader = tableCards.Count == 0;
+
+            // Create game state with trump suit
+            var gameState = CreatePerfectGameState(playerId, activePlayers, playerIdMap, tableCards, trumpSuit.Value);
+
+            // Create Trump2PerfectGame and get best move
+            var trumpGame = new Trump2PerfectGame(gameState);
+            PerfectCardMove bestMove;
+
+            if (isLeader)
+            {
+                bestMove = GetBestTrumpLeadMove(trumpGame);
+            }
+            else
+            {
+                bestMove = GetBestTrumpFollowMove(trumpGame, gameState, tableCards[0]);
+            }
+
+            return bestMove.Card;
+        }
+
+        /// <summary>
         /// Creates a PerfPerfectGameState for the current game situation
         /// </summary>
         private PerfPerfectGameState CreatePerfectGameState(
             int currentPlayerId, 
             List<int> activePlayers, 
             Dictionary<int, int> playerIdMap,
-            List<Card> tableCards)
+            List<Card> tableCards,
+            TrumpSuit trumpSuit)
         {
             var isLeader = tableCards.Count == 0;
+            var contractType = GetContractType();
+
+            var gameMode = contractType switch
+            {
+                ContractType.Sans => PreferanceGameMode.Sans,
+                ContractType.Trump => PreferanceGameMode.Trump,
+                ContractType.Betl => PreferanceGameMode.Betl,
+                _ => PreferanceGameMode.Sans
+            };
 
             var gameState = new PerfPerfectGameState(
-                PreferanceGameMode.Sans,
+                gameMode,
                 new List<string> { "Player0", "Player1" },
+                trumpSuit,
                 playerIdMap[currentPlayerId],
                 playerIdMap[currentPlayerId]
             );
@@ -915,7 +1000,17 @@ namespace GameOfCardsCsharp.PreferanceBots
         /// </summary>
         private PerfectCardMove GetBestLeadMove(Sans2PerfectGame sansGame)
         {
-            return sansGame.BestLeadCard();
+            var bestMoves = sansGame.BestLeadCard();
+            
+            // Log all best moves for analysis
+            if (bestMoves.Count > 1)
+            {
+                var movesList = string.Join(", ", bestMoves.Select(m => GetCardText(m.Card)));
+                LogMessage($"💡 {bestMoves.Count} equivalent best moves: {movesList}");
+            }
+            
+            // Return the first move for AI to play
+            return bestMoves[0];
         }
 
         /// <summary>
@@ -936,6 +1031,44 @@ namespace GameOfCardsCsharp.PreferanceBots
             gameState.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = false;
 
             return sansGame.BestFollowCard(leadMove);
+        }
+
+        /// <summary>
+        /// Gets the best lead move using Trump2PerfectGame
+        /// </summary>
+        private PerfectCardMove GetBestTrumpLeadMove(Trump2PerfectGame trumpGame)
+        {
+            var bestMoves = trumpGame.BestLeadCard();
+            
+            // Log all best moves for analysis
+            if (bestMoves.Count > 1)
+            {
+                var movesList = string.Join(", ", bestMoves.Select(m => GetCardText(m.Card)));
+                LogMessage($"💡 {bestMoves.Count} equivalent best moves: {movesList}");
+            }
+            
+            // Return the first move for AI to play
+            return bestMoves[0];
+        }
+
+        /// <summary>
+        /// Gets the best follow move using Trump2PerfectGame
+        /// </summary>
+        private PerfectCardMove GetBestTrumpFollowMove(Trump2PerfectGame trumpGame, PerfPerfectGameState gameState, Card leadCard)
+        {
+            // Find the lead move in the game state
+            var leadSuitMoves = gameState.Moves[(int)leadCard.Suit];
+            var leadMove = leadSuitMoves.FirstOrDefault(m => 
+                m.Card.Suit == leadCard.Suit && 
+                m.Card.Rank == leadCard.Rank);
+
+            if (leadMove.Card == null)
+                throw new InvalidOperationException($"Could not find lead card {GetCardText(leadCard)} in game state");
+
+            // Mark the lead card as played
+            gameState.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = false;
+
+            return trumpGame.BestFollowCard(leadMove);
         }
 
         /// <summary>
@@ -969,9 +1102,9 @@ namespace GameOfCardsCsharp.PreferanceBots
                 var contractType = GetContractType();
                 var activePlayers = GetActivePlayerIds();
 
-                if (contractType != ContractType.Sans)
+                if (contractType != ContractType.Sans && contractType != ContractType.Trump)
                 {
-                    AnalysisStatusLabel.Text = "⚠️ Analysis is currently only supported for Sans games.";
+                    AnalysisStatusLabel.Text = $"⚠️ Analysis is currently only supported for Sans and Trump games.";
                 }
                 else if (activePlayers.Count != 2)
                 {
@@ -983,7 +1116,18 @@ namespace GameOfCardsCsharp.PreferanceBots
             // Perform analysis
             try
             {
-                var analysisResult = PerformSans2Analysis();
+                var contractType = GetContractType();
+                AnalysisResult analysisResult;
+
+                if (contractType == ContractType.Sans)
+                {
+                    analysisResult = PerformSans2Analysis();
+                }
+                else // ContractType.Trump
+                {
+                    analysisResult = PerformTrump2Analysis();
+                }
+
                 DisplayAnalysisResult(analysisResult);
             }
             catch (Exception ex)
@@ -1013,48 +1157,123 @@ namespace GameOfCardsCsharp.PreferanceBots
             var isLeader = tableCards.Count == 0;
 
             // Create game state using the helper method
-            var gameState = CreatePerfectGameState(currentPlayerId, activePlayers, playerIdMap, tableCards);
+            var gameState = CreatePerfectGameState(currentPlayerId, activePlayers, playerIdMap, tableCards, TrumpSuit.None);
 
-            // Create Sans2PerfectGame and get best move
+            // Create Sans2PerfectGame and get best moves
             var sansGame = new Sans2PerfectGame(gameState);
-            PerfectCardMove bestMove;
+            List<PerfectCardMove> bestMoves;
 
             if (isLeader)
             {
-                bestMove = GetBestLeadMove(sansGame);
+                bestMoves = sansGame.BestLeadCard();
             }
             else
             {
-                bestMove = GetBestFollowMove(sansGame, gameState, tableCards[0]);
+                // For follow moves, wrap the single best follow move in a list for consistency
+                var bestFollowMove = GetBestFollowMove(sansGame, gameState, tableCards[0]);
+                bestMoves = new List<PerfectCardMove> { bestFollowMove };
             }
 
-            // Extract expected tricks directly from the move
+            // Extract expected tricks from the first move (all have the same expected tricks)
+            var firstMove = bestMoves[0];
             var currentPlayerMappedIndex = playerIdMap[currentPlayerId];
             var opponentIdFinal = activePlayers.First(id => id != currentPlayerId);
             var opponentMappedIndexFinal = playerIdMap[opponentIdFinal];
 
             return new AnalysisResult
             {
-                RecommendedCard = bestMove.Card,
+                BestMoves = bestMoves,
                 IsLeader = isLeader,
                 CurrentPlayerId = currentPlayerId,
-                CurrentPlayerExpectedTricks = bestMove.ExpectedTricks![currentPlayerMappedIndex],
+                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks![currentPlayerMappedIndex],
                 OpponentId = opponentIdFinal,
-                OpponentExpectedTricks = bestMove.ExpectedTricks![opponentMappedIndexFinal]
+                OpponentExpectedTricks = firstMove.ExpectedTricks![opponentMappedIndexFinal]
+            };
+        }
+
+        private AnalysisResult PerformTrump2Analysis()
+        {
+            if (_gamePlayEngine == null)
+                throw new InvalidOperationException("Game engine not initialized");
+
+            // Get trump suit
+            var trumpSuit = GetTrumpSuitEnum();
+            if (trumpSuit == null)
+                throw new InvalidOperationException("Trump suit not specified for Trump game");
+
+            // Get active players and current player
+            var activePlayers = GetActivePlayerIds();
+            var currentPlayerId = _gamePlayEngine.GetCurrentPlayerTurn();
+
+            // Map player IDs to 0 and 1 for Trump2PerfectGame
+            var playerIdMap = new Dictionary<int, int>();
+            for (int i = 0; i < activePlayers.Count; i++)
+            {
+                playerIdMap[activePlayers[i]] = i;
+            }
+
+            // Check if current player is the leader
+            var tableCards = _gamePlayEngine.GetTableCards();
+            var isLeader = tableCards.Count == 0;
+
+            // Create game state using the helper method
+            var gameState = CreatePerfectGameState(currentPlayerId, activePlayers, playerIdMap, tableCards, trumpSuit.Value);
+
+            // Create Trump2PerfectGame and get best moves
+            var trumpGame = new Trump2PerfectGame(gameState);
+            List<PerfectCardMove> bestMoves;
+
+            if (isLeader)
+            {
+                bestMoves = trumpGame.BestLeadCard();
+            }
+            else
+            {
+                // For follow moves, wrap the single best follow move in a list for consistency
+                var bestFollowMove = GetBestTrumpFollowMove(trumpGame, gameState, tableCards[0]);
+                bestMoves = new List<PerfectCardMove> { bestFollowMove };
+            }
+
+            // Extract expected tricks from the first move (all have the same expected tricks)
+            var firstMove = bestMoves[0];
+            var currentPlayerMappedIndex = playerIdMap[currentPlayerId];
+            var opponentIdFinal = activePlayers.First(id => id != currentPlayerId);
+            var opponentMappedIndexFinal = playerIdMap[opponentIdFinal];
+
+            return new AnalysisResult
+            {
+                BestMoves = bestMoves,
+                IsLeader = isLeader,
+                CurrentPlayerId = currentPlayerId,
+                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks![currentPlayerMappedIndex],
+                OpponentId = opponentIdFinal,
+                OpponentExpectedTricks = firstMove.ExpectedTricks![opponentMappedIndexFinal]
             };
         }
 
         private void DisplayAnalysisResult(AnalysisResult result)
         {
+            var contractType = GetContractType();
             var moveType = result.IsLeader ? "Lead" : "Follow";
             var currentPlayerName = GetPlayerName(result.CurrentPlayerId);
             var opponentName = GetPlayerName(result.OpponentId);
 
-            AnalysisStatusLabel.Text = $"✓ Analysis complete for {currentPlayerName}";
+            AnalysisStatusLabel.Text = $"✓ {contractType} Analysis complete for {currentPlayerName}";
 
             AnalysisRecommendedCardLabel.IsVisible = true;
-            AnalysisRecommendedCardLabel.Text = 
-                $"Recommended {moveType}: {GetCardText(result.RecommendedCard)}";
+            
+            // Display all best cards
+            if (result.BestMoves.Count == 1)
+            {
+                AnalysisRecommendedCardLabel.Text = 
+                    $"Recommended {moveType}: {GetCardText(result.BestMoves[0].Card)}";
+            }
+            else
+            {
+                var cardsList = string.Join(", ", result.BestMoves.Select(m => GetCardText(m.Card)));
+                AnalysisRecommendedCardLabel.Text = 
+                    $"Best {moveType} moves ({result.BestMoves.Count}): {cardsList}";
+            }
 
             AnalysisExpectedTricksLabel.IsVisible = true;
             AnalysisExpectedTricksLabel.Text = 
@@ -1082,7 +1301,7 @@ namespace GameOfCardsCsharp.PreferanceBots
         // Helper class for analysis results
         private class AnalysisResult
         {
-            public Card RecommendedCard { get; set; } = null!;
+            public List<PerfectCardMove> BestMoves { get; set; } = new();
             public bool IsLeader { get; set; }
             public int CurrentPlayerId { get; set; }
             public int CurrentPlayerExpectedTricks { get; set; }
