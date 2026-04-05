@@ -70,12 +70,12 @@ namespace GameOfCardsCsharp.Preferance.Common
         /// Total tricks won by declarer(s)
         /// </summary>
         public int DeclarerTricks { get; }
-
+        
         /// <summary>
         /// Total tricks won by defender(s)
         /// </summary>
         public int DefendersTricks { get; }
-
+        
         /// <summary>
         /// Individual trick counts for each player [Player0, Player1, Player2]
         /// For 2-player games: Player2's count is 0
@@ -86,20 +86,14 @@ namespace GameOfCardsCsharp.Preferance.Common
         {
             DeclarerTricks = declarerTricks;
             DefendersTricks = defendersTricks;
-
+            
             if (individualTricks == null || (individualTricks.Length != 2 && individualTricks.Length != 3))
             {
                 throw new ArgumentException("IndividualTricks must have 2 or 3 elements", nameof(individualTricks));
             }
-
+            
             IndividualTricks = new int[3];
             Array.Copy(individualTricks, IndividualTricks, individualTricks.Length);
-
-            // Validation
-            if (DeclarerTricks + DefendersTricks != individualTricks.Sum())
-            {
-                throw new ArgumentException("DeclarerTricks + DefendersTricks must equal sum of IndividualTricks");
-            }
         }
 
         /// <summary>
@@ -111,10 +105,10 @@ namespace GameOfCardsCsharp.Preferance.Common
             individual[0] = player0Tricks;
             individual[1] = player1Tricks;
             individual[2] = 0;
-
+            
             var declarerTricks = declarerIndex == 0 ? player0Tricks : player1Tricks;
             var defendersTricks = declarerIndex == 0 ? player1Tricks : player0Tricks;
-
+            
             return new Score3(declarerTricks, defendersTricks, individual);
         }
 
@@ -127,10 +121,10 @@ namespace GameOfCardsCsharp.Preferance.Common
             {
                 throw new ArgumentException("Must provide exactly 3 trick counts", nameof(individualTricks));
             }
-
+            
             var declarerTricks = individualTricks[declarerIndex];
             var defendersTricks = individualTricks.Sum() - declarerTricks;
-
+            
             return new Score3(declarerTricks, defendersTricks, individualTricks);
         }
 
@@ -142,8 +136,8 @@ namespace GameOfCardsCsharp.Preferance.Common
             var newIndividual = new int[3];
             Array.Copy(IndividualTricks, newIndividual, 3);
             newIndividual[playerIndex]++;
-
-            return FromThreePlayer(newIndividual, declarerIndex);
+            
+            return Score3.FromThreePlayer(newIndividual, declarerIndex);
         }
 
         /// <summary>
@@ -156,7 +150,7 @@ namespace GameOfCardsCsharp.Preferance.Common
             {
                 newIndividual[i] = IndividualTricks[i] + other.IndividualTricks[i];
             }
-
+            
             return new Score3(
                 DeclarerTricks + other.DeclarerTricks,
                 DefendersTricks + other.DefendersTricks,
@@ -169,6 +163,57 @@ namespace GameOfCardsCsharp.Preferance.Common
                    $"[P0:{IndividualTricks[0]} P1:{IndividualTricks[1]} P2:{IndividualTricks[2]}]";
         }
     }
+
+    /// <summary>
+    /// Result of analyzing a single suit for 3-player game
+    /// </summary>
+    public class SuitAnalysis3Result
+    {
+        /// <summary>
+        /// The suit being analyzed
+        /// </summary>
+        public Suit Suit { get; set; }
+
+        /// <summary>
+        /// Player index who has the strongest card (first available move)
+        /// -1 if no cards available in this suit
+        /// </summary>
+        public int StrongestCardOwner { get; set; }
+
+        /// <summary>
+        /// The strongest card in this suit (null if no cards available)
+        /// </summary>
+        public PerfectCardMove? StrongestCard { get; set; }
+
+        /// <summary>
+        /// Expected tricks for declarer in this suit (assuming optimal cooperative play by defenders)
+        /// </summary>
+        public int DeclarerWins { get; set; }
+
+        /// <summary>
+        /// Expected tricks for defenders in this suit (assuming optimal cooperative play)
+        /// </summary>
+        public int DefenderWins { get; set; }
+
+        /// <summary>
+        /// Total cards remaining in this suit
+        /// </summary>
+        public int TotalCardsInSuit { get; set; }
+
+        /// <summary>
+        /// Number of cards each player has in this suit [Player0, Player1, Player2]
+        /// </summary>
+        public int[] CardsPerPlayer { get; set; } = new int[3];
+
+        public override string ToString()
+        {
+            var strongestCardText = StrongestCard?.Card.ToString() ?? "None";
+            return $"{Suit}: Strongest={strongestCardText} (P{StrongestCardOwner}), " +
+                   $"DeclWins={DeclarerWins}, DefWins={DefenderWins}, Total={TotalCardsInSuit}, " +
+                   $"Cards=[P0:{CardsPerPlayer[0]}, P1:{CardsPerPlayer[1]}, P2:{CardsPerPlayer[2]}]";
+        }
+    }
+
     /// <summary>
     /// Represents a perfect information game state where all cards are known.
     /// Cards are organized by suit and sorted by rank for efficient analysis.
@@ -224,6 +269,179 @@ namespace GameOfCardsCsharp.Preferance.Common
                 new List<PerfectCardMove>(), // Hearts
                 new List<PerfectCardMove>()  // Spades
             };
+        }
+
+        /// <summary>
+        /// Analyzes a suit to estimate tricks for declarer vs defenders.
+        /// Simulates optimal play: declarer wins when they have strongest card,
+        /// defenders cooperate to minimize declarer tricks.
+        /// </summary>
+        /// <param name="suit">The suit to analyze</param>
+        /// <param name="declarerIndex">Index of the declarer (0, 1, or 2)</param>
+        /// <returns>Analysis result with estimated wins</returns>
+        public SuitAnalysis3Result AnalyzeSuit(Suit suit, int declarerIndex)
+        {
+            var suitMoves = Moves[(int)suit];
+            
+            // Track which cards are still "in play" for this simulation
+            var inPlay = new bool[suitMoves.Count];
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                inPlay[i] = suitMoves[i].Available;
+            }
+
+            int declarerWins = 0;
+            int defenderWins = 0;
+
+            // Defender indices
+            var defenderIndices = new List<int>();
+            for (int i = 0; i < 3; i++)
+            {
+                if (i != declarerIndex)
+                    defenderIndices.Add(i);
+            }
+
+            // Find who has the strongest card
+            int strongestCardOwner = -1;
+            PerfectCardMove? strongestCard = null;
+            
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                if (inPlay[i])
+                {
+                    strongestCardOwner = suitMoves[i].PlayerIndex;
+                    strongestCard = suitMoves[i];
+                    break;
+                }
+            }
+
+            // Count cards per player
+            var cardsPerPlayer = new int[3];
+            foreach (var move in suitMoves.Where(m => m.Available))
+            {
+                cardsPerPlayer[move.PlayerIndex]++;
+            }
+
+            // Simulate tricks until no more cards
+            while (true)
+            {
+                // Find highest card still in play
+                int highestIdx = -1;
+                for (int i = 0; i < suitMoves.Count; i++)
+                {
+                    if (inPlay[i])
+                    {
+                        highestIdx = i;
+                        break;
+                    }
+                }
+
+                if (highestIdx == -1)
+                    break; // No more cards
+
+                var highestMove = suitMoves[highestIdx];
+                int highestOwner = highestMove.PlayerIndex;
+
+                // Check if declarer has the highest card
+                if (highestOwner == declarerIndex)
+                {
+                    // Declarer wins this trick
+                    declarerWins++;
+                    inPlay[highestIdx] = false;
+
+                    // Both defenders play their smallest cards
+                    for (int defIdx = 0; defIdx < defenderIndices.Count; defIdx++)
+                    {
+                        int defenderId = defenderIndices[defIdx];
+                        int smallestDefenderCard = FindSmallestCardIndex(suitMoves, inPlay, defenderId);
+                        
+                        if (smallestDefenderCard != -1)
+                        {
+                            inPlay[smallestDefenderCard] = false;
+                        }
+                    }
+                }
+                else
+                {
+                    // Defender has highest card - defender wins
+                    defenderWins++;
+                    inPlay[highestIdx] = false;
+
+                    // Declarer plays smallest card (if has any)
+                    int smallestDeclarerCard = FindSmallestCardIndex(suitMoves, inPlay, declarerIndex);
+                    if (smallestDeclarerCard != -1)
+                    {
+                        inPlay[smallestDeclarerCard] = false;
+                    }
+
+                    // Other defender plays smallest card (if has any)
+                    int otherDefender = defenderIndices.First(d => d != highestOwner);
+                    int smallestOtherDefCard = FindSmallestCardIndex(suitMoves, inPlay, otherDefender);
+                    if (smallestOtherDefCard != -1)
+                    {
+                        inPlay[smallestOtherDefCard] = false;
+                    }
+                }
+            }
+
+            // Count remaining cards that weren't simulated (edge case)
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                if (inPlay[i])
+                {
+                    // Award remaining cards to their owner
+                    if (suitMoves[i].PlayerIndex == declarerIndex)
+                        declarerWins++;
+                    else
+                        defenderWins++;
+                }
+            }
+
+            // Count total cards in suit
+            int totalCards = suitMoves.Count(m => m.Available);
+
+            return new SuitAnalysis3Result
+            {
+                Suit = suit,
+                StrongestCardOwner = strongestCardOwner,
+                StrongestCard = strongestCard,
+                DeclarerWins = declarerWins,
+                DefenderWins = defenderWins,
+                TotalCardsInSuit = totalCards,
+                CardsPerPlayer = cardsPerPlayer
+            };
+        }
+
+        /// <summary>
+        /// Finds the smallest card index for a specific player in the suit
+        /// </summary>
+        private int FindSmallestCardIndex(List<PerfectCardMove> suitMoves, bool[] inPlay, int playerIndex)
+        {
+            // Search from end (smallest cards) towards beginning
+            for (int i = suitMoves.Count - 1; i >= 0; i--)
+            {
+                if (inPlay[i] && suitMoves[i].PlayerIndex == playerIndex)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Analyzes all four suits and returns combined results
+        /// </summary>
+        public List<SuitAnalysis3Result> AnalyzeAllSuits(int declarerIndex)
+        {
+            var results = new List<SuitAnalysis3Result>();
+            
+            for (int suitIndex = 0; suitIndex < 4; suitIndex++)
+            {
+                var suit = (Suit)suitIndex;
+                results.Add(AnalyzeSuit(suit, declarerIndex));
+            }
+            
+            return results;
         }
 
         /// <summary>
@@ -312,6 +530,31 @@ namespace GameOfCardsCsharp.Preferance.Common
             for (int i = 0; i < Moves.Count; i++)
             {
                 SortAndReindexSuit(i);
+            }
+        }
+
+        /// <summary>
+        /// Sorts a suit's moves by rank (descending) and updates list indices
+        /// </summary>
+        private void SortAndReindexSuit(int suitIndex)
+        {
+            var suitMoves = Moves[suitIndex];
+            
+            // Sort by rank descending (Ace > King > Queen > ... > Two)
+            var sorted = suitMoves.OrderByDescending(m => m.Card.Rank).ToList();
+            
+            // Clear and re-add with correct indices
+            suitMoves.Clear();
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                var move = sorted[i];
+                var reindexed = new PerfectCardMove(
+                    card: move.Card,
+                    playerIndex: move.PlayerIndex,
+                    listIndex: i,
+                    available: move.Available
+                );
+                suitMoves.Add(reindexed);
             }
         }
 
@@ -415,58 +658,15 @@ namespace GameOfCardsCsharp.Preferance.Common
         {
             return Moves
                 .SelectMany(suitMoves => suitMoves)
-                .Where(move => move.PlayerIndex == playerIndex && move.Available);
+                .Where(move => move.Available && move.PlayerIndex == playerIndex);
         }
 
         /// <summary>
-        /// Gets available moves in a specific suit for a player (not just candidates)
+        /// Gets all available moves for the current player
         /// </summary>
-        public IEnumerable<PerfectCardMove> GetAvailableMovesInSuit(int playerIndex, Suit suit)
+        public IEnumerable<PerfectCardMove> GetAvailableMovesForCurrentPlayer()
         {
-            int suitIndex = (int)suit;
-            return Moves[suitIndex]
-                .Where(move => move.PlayerIndex == playerIndex && move.Available);
-        }
-
-        /// <summary>
-        /// Sorts a suit's moves by rank (descending) and updates list indices
-        /// </summary>
-        private void SortAndReindexSuit(int suitIndex)
-        {
-            var suitMoves = Moves[suitIndex];
-            
-            // Sort by rank descending (Ace first, Two last)
-            suitMoves.Sort((a, b) => b.Card.Rank.CompareTo(a.Card.Rank));
-
-            // Update list indices
-            for (int i = 0; i < suitMoves.Count; i++)
-            {
-                var move = suitMoves[i];
-                move.ListIndex = i;
-                suitMoves[i] = move;
-            }
-        }
-
-        public override string ToString()
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine($"Game Mode: {GameMode}");
-            sb.AppendLine($"Players: {string.Join(", ", Players)}");
-            sb.AppendLine($"Current Turn: {Players[CurrentPlayerIndex]} (Index: {CurrentPlayerIndex})");
-            sb.AppendLine($"Trick Leader: {Players[LeaderPlayerIndex]} (Index: {LeaderPlayerIndex})");
-            sb.AppendLine();
-
-            var suitNames = new[] { "Clubs", "Diamonds", "Hearts", "Spades" };
-            for (int i = 0; i < Moves.Count; i++)
-            {
-                sb.AppendLine($"{suitNames[i]}:");
-                foreach (var move in Moves[i])
-                {
-                    sb.AppendLine($"  {move}");
-                }
-            }
-
-            return sb.ToString();
+            return GetAvailableMovesForPlayer(CurrentPlayerIndex);
         }
     }
 }
