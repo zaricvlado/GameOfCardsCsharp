@@ -1200,6 +1200,7 @@ namespace GameOfCardsCsharp.PreferanceBots
             AnalysisResultsPanel.IsVisible = true;
             AnalysisRecommendedCardLabel.IsVisible = false;
             AnalysisExpectedTricksLabel.IsVisible = false;
+            AnalysisPerformanceLabel.IsVisible = false;
 
             if (_gamePlayEngine == null || !_gamePlayEngine.IsGameInProgress())
             {
@@ -1229,6 +1230,9 @@ namespace GameOfCardsCsharp.PreferanceBots
                 var activePlayers = GetActivePlayerIds();
                 AnalysisResult analysisResult;
 
+                // Start timing
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
                 if (contractType == ContractType.Sans && activePlayers.Count == 2)
                 {
                     analysisResult = PerformSans2Analysis();
@@ -1246,6 +1250,10 @@ namespace GameOfCardsCsharp.PreferanceBots
                     AnalysisStatusLabel.Text = $"⚠️ Unsupported configuration: {contractType} with {activePlayers.Count} players";
                     return;
                 }
+
+                // Stop timing
+                stopwatch.Stop();
+                analysisResult.ElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
 
                 DisplayAnalysisResult(analysisResult);
             }
@@ -1486,6 +1494,10 @@ namespace GameOfCardsCsharp.PreferanceBots
                     $"  {currentPlayerName}: {result.CurrentPlayerExpectedTricks}\n" +
                     $"  {opponentName}: {result.OpponentExpectedTricks}";
             }
+
+            // Display performance metrics
+            AnalysisPerformanceLabel.IsVisible = true;
+            AnalysisPerformanceLabel.Text = $"⏱️ Time: {result.ElapsedMilliseconds:F2} ms";
         }
 
         private class AnalysisResult
@@ -1498,6 +1510,7 @@ namespace GameOfCardsCsharp.PreferanceBots
             public int OpponentExpectedTricks { get; set; }
             public bool IsThreePlayer { get; set; } = false;
             public int[]? AllPlayerTricks { get; set; }
+            public double ElapsedMilliseconds { get; set; }
         }
     }
 }

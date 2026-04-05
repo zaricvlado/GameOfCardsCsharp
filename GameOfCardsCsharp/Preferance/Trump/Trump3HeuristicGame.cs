@@ -111,26 +111,121 @@ namespace GameOfCardsCsharp.Preferance.Trump
         }
 
         /// <summary>
-        /// Estimates the final Score3 by simulating the game using heuristics
+        /// Estimates the final Score3 by playing the entire game to completion using heuristics.
+        /// Creates a copy of the current state and simulates all remaining tricks.
         /// </summary>
         public Score3 EstimateScore()
         {
-            // Simple initial estimate: sum up suit analyses
-            var suitAnalyses = _state.AnalyzeAllSuits(_declarerIndex);
+            // Clone the state to simulate without affecting the original
+            var simulationState = CloneState(_state);
+            var simulationGame = new Trump3HeuristicGame(simulationState, _declarerIndex);
             
-            int totalDeclarerWins = suitAnalyses.Sum(a => a.DeclarerWins);
-            int totalDefenderWins = suitAnalyses.Sum(a => a.DefenderWins);
+            // Track tricks won by each player
+            var tricksWon = new int[3];
             
-            // For individual tricks, we'd need to simulate actual play
-            // For now, approximate based on card distribution
-            var individual = new int[3];
-            individual[_declarerIndex] = totalDeclarerWins;
+            // Play the game to completion
+            while (HasMovesRemaining(simulationState))
+            {
+                // Lead card
+                var leadMove = simulationGame.BestLeadCard();
+                simulationState.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = false;
+                
+                int leadPlayer = simulationState.CurrentPlayerIndex;
+                simulationState.AdvanceTurn();
+                
+                // Second player follows
+                var secondMove = simulationGame.BestFollowCard(leadMove);
+                simulationState.Moves[(int)secondMove.Card.Suit][secondMove.ListIndex].Available = false;
+                simulationState.AdvanceTurn();
+                
+                // Third player follows
+                var thirdMove = simulationGame.BestFollowCard(leadMove, secondMove);
+                simulationState.Moves[(int)thirdMove.Card.Suit][thirdMove.ListIndex].Available = false;
+                
+                // Determine winner of this trick
+                int winnerId = DetermineWinner(leadMove, secondMove, thirdMove);
+                tricksWon[winnerId]++;
+                
+                // Winner leads next trick
+                simulationState.CurrentPlayerIndex = winnerId;
+            }
             
-            // Split defender wins (rough approximation - could be improved)
-            individual[_defenderIndices[0]] = totalDefenderWins / 2;
-            individual[_defenderIndices[1]] = totalDefenderWins - individual[_defenderIndices[0]];
+            // Return the final score based on tricks won
+            return Score3.FromThreePlayer(tricksWon, _declarerIndex);
+        }
+        
+        /// <summary>
+        /// Clones the PerfPerfectGameState for simulation purposes
+        /// </summary>
+        private static PerfPerfectGameState CloneState(PerfPerfectGameState original)
+        {
+            var clone = new PerfPerfectGameState(
+                original.GameMode, 
+                new List<string>(original.Players),
+                original.TrumpSuit,
+                original.CurrentPlayerIndex,
+                original.LeaderPlayerIndex);
             
-            return Score3.FromThreePlayer(individual, _declarerIndex);
+            // Clone all moves
+            for (int suitIndex = 0; suitIndex < 4; suitIndex++)
+            {
+                foreach (var move in original.Moves[suitIndex])
+                {
+                    clone.Moves[suitIndex].Add(new PerfectCardMove(
+                        move.Card,
+                        move.PlayerIndex,
+                        move.ListIndex,
+                        move.Available
+                    ));
+                }
+            }
+            
+            return clone;
+        }
+        
+        /// <summary>
+        /// Checks if there are any moves remaining in the game
+        /// </summary>
+        private static bool HasMovesRemaining(PerfPerfectGameState state)
+        {
+            return state.Moves.Any(suitMoves => suitMoves.Any(m => m.Available));
+        }
+        
+        /// <summary>
+        /// Determines the winner of a trick (highest trump, or highest card in lead suit)
+        /// </summary>
+        private int DetermineWinner(PerfectCardMove leadMove, PerfectCardMove follow1, PerfectCardMove follow2)
+        {
+            var trumpSuit = _trumpSuit;
+            var leadSuit = leadMove.Card.Suit;
+            
+            // Check for trump cards
+            var trumpCards = new List<(PerfectCardMove move, int playerIndex)>();
+            
+            if (leadMove.Card.Suit == trumpSuit)
+                trumpCards.Add((leadMove, leadMove.PlayerIndex));
+            if (follow1.Card.Suit == trumpSuit)
+                trumpCards.Add((follow1, follow1.PlayerIndex));
+            if (follow2.Card.Suit == trumpSuit)
+                trumpCards.Add((follow2, follow2.PlayerIndex));
+            
+            // If there are trump cards, highest trump wins
+            if (trumpCards.Any())
+            {
+                return trumpCards.OrderByDescending(t => t.move.Card.Rank).First().playerIndex;
+            }
+            
+            // Otherwise, highest card in lead suit wins
+            var leadSuitCards = new List<(PerfectCardMove move, int playerIndex)>();
+            
+            if (leadMove.Card.Suit == leadSuit)
+                leadSuitCards.Add((leadMove, leadMove.PlayerIndex));
+            if (follow1.Card.Suit == leadSuit)
+                leadSuitCards.Add((follow1, follow1.PlayerIndex));
+            if (follow2.Card.Suit == leadSuit)
+                leadSuitCards.Add((follow2, follow2.PlayerIndex));
+            
+            return leadSuitCards.OrderByDescending(t => t.move.Card.Rank).First().playerIndex;
         }
 
         // ==================== LEAD SELECTION ====================

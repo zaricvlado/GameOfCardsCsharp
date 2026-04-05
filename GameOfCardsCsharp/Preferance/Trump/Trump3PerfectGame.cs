@@ -112,30 +112,35 @@ namespace GameOfCardsCsharp.Preferance.Trump
 
             int originalPlayer = _state.CurrentPlayerIndex;
             int winnerId;
+            PerfectCardMove? thirdMove = null;
             
             if (firstFollowMove != null)
             {
+                // We have all 3 cards - determine winner directly
                 winnerId = DetermineWinner(leadMove, firstFollowMove, currentFollowMove);
             }
             else
             {
+                // We need to simulate the third player's move
                 int thirdPlayerIndex = GetThirdPlayer(leadMove.PlayerIndex, _state.CurrentPlayerIndex);
                 int savedCurrentPlayer = _state.CurrentPlayerIndex;
                 _state.CurrentPlayerIndex = thirdPlayerIndex;
                 
-                var thirdMove = _heuristicGame.BestFollowCard(leadMove, currentFollowMove);
+                thirdMove = _heuristicGame.BestFollowCard(leadMove, currentFollowMove);
                 _state.Moves[(int)thirdMove.Card.Suit][thirdMove.ListIndex].Available = false;
                 
                 winnerId = DetermineWinner(leadMove, currentFollowMove, thirdMove);
-                
-                _state.Moves[(int)thirdMove.Card.Suit][thirdMove.ListIndex].Available = true;
                 _state.CurrentPlayerIndex = savedCurrentPlayer;
             }
 
+            // Winner leads next trick
             _state.CurrentPlayerIndex = winnerId;
+            
+            // Calculate future score with all three cards marked as unavailable
             var futureScore = _heuristicGame.EstimateScore();
             var result = futureScore.IncrementPlayer(winnerId, _declarerIndex);
 
+            // NOW restore all the cards back to their original state
             _state.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = true;
             
             if (firstFollowMove != null)
@@ -144,6 +149,13 @@ namespace GameOfCardsCsharp.Preferance.Trump
             }
             
             _state.Moves[(int)currentFollowMove.Card.Suit][currentFollowMove.ListIndex].Available = true;
+            
+            // Restore third move if it was simulated
+            if (thirdMove != null)
+            {
+                _state.Moves[(int)thirdMove.Card.Suit][thirdMove.ListIndex].Available = true;
+            }
+            
             _state.CurrentPlayerIndex = originalPlayer;
 
             return result;
