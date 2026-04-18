@@ -110,7 +110,6 @@ namespace GameOfCardsCsharp.Preferance.Trump
         }
 
         /// <summary>
-<<<<<<< HEAD
         /// Estimates the final Score3 by simulating the game using heuristics.
         /// This method plays out all remaining tricks using heuristic moves.
         /// </summary>
@@ -118,170 +117,21 @@ namespace GameOfCardsCsharp.Preferance.Trump
         {
             // Clone state to avoid modifying the original
             var simulationState = _state.Clone();
-            
-            // DEBUG: Count initial cards
-            int totalCards = 0;
-            int[] cardsPerPlayer = new int[3];
-            for (int i = 0; i < 3; i++)
-            {
-                cardsPerPlayer[i] = simulationState.GetAvailableMovesForPlayer(i).Count();
-                totalCards += cardsPerPlayer[i];
-            }
-            System.Diagnostics.Debug.WriteLine($"=== EstimateScore START ===");
-            System.Diagnostics.Debug.WriteLine($"Total cards: {totalCards}");
-            System.Diagnostics.Debug.WriteLine($"Cards per player: P0={cardsPerPlayer[0]}, P1={cardsPerPlayer[1]}, P2={cardsPerPlayer[2]}");
-            System.Diagnostics.Debug.WriteLine($"Expected tricks to simulate: {totalCards / 3}");
-            
+
             // Track tricks won by each player during simulation
             int[] tricksWonDuringSimulation = new int[3];
-            
-            int trickCounter = 0;
-            
+
             // Simulate all remaining tricks
             while (HasRemainingCards(simulationState))
             {
-                trickCounter++;
-                System.Diagnostics.Debug.WriteLine($"\n--- Simulating Trick {trickCounter} ---");
-                System.Diagnostics.Debug.WriteLine($"Current player before trick: {simulationState.CurrentPlayerIndex}");
-                
-                // Get current player
-                int currentPlayer = simulationState.CurrentPlayerIndex;
-                
                 // Play out one complete trick
                 var trickWinner = SimulateTrick(simulationState);
-                
-                System.Diagnostics.Debug.WriteLine($"Trick {trickCounter} winner: Player {trickWinner}");
-                
+
                 // Record the trick winner
                 tricksWonDuringSimulation[trickWinner]++;
-                
-                System.Diagnostics.Debug.WriteLine($"Current tricks: [{string.Join(", ", tricksWonDuringSimulation)}], Sum={tricksWonDuringSimulation.Sum()}");
             }
-            
-            System.Diagnostics.Debug.WriteLine($"\n=== EstimateScore END ===");
-            System.Diagnostics.Debug.WriteLine($"Total tricks simulated: {trickCounter}");
-            System.Diagnostics.Debug.WriteLine($"Final tricksWonDuringSimulation: [{string.Join(", ", tricksWonDuringSimulation)}]");
-            System.Diagnostics.Debug.WriteLine($"Sum: {tricksWonDuringSimulation.Sum()}");
-            System.Diagnostics.Debug.WriteLine($"=========================\n");
-            
+
             return Score3.FromThreePlayer(tricksWonDuringSimulation, _declarerIndex);
-=======
-        /// Estimates the final Score3 by playing the entire game to completion using heuristics.
-        /// Creates a copy of the current state and simulates all remaining tricks.
-        /// </summary>
-        public Score3 EstimateScore()
-        {
-            // Clone the state to simulate without affecting the original
-            var simulationState = CloneState(_state);
-            var simulationGame = new Trump3HeuristicGame(simulationState, _declarerIndex);
-            
-            // Track tricks won by each player
-            var tricksWon = new int[3];
-            
-            // Play the game to completion
-            while (HasMovesRemaining(simulationState))
-            {
-                // Lead card
-                var leadMove = simulationGame.BestLeadCard();
-                simulationState.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = false;
-                
-                int leadPlayer = simulationState.CurrentPlayerIndex;
-                simulationState.AdvanceTurn();
-                
-                // Second player follows
-                var secondMove = simulationGame.BestFollowCard(leadMove);
-                simulationState.Moves[(int)secondMove.Card.Suit][secondMove.ListIndex].Available = false;
-                simulationState.AdvanceTurn();
-                
-                // Third player follows
-                var thirdMove = simulationGame.BestFollowCard(leadMove, secondMove);
-                simulationState.Moves[(int)thirdMove.Card.Suit][thirdMove.ListIndex].Available = false;
-                
-                // Determine winner of this trick
-                int winnerId = DetermineWinner(leadMove, secondMove, thirdMove);
-                tricksWon[winnerId]++;
-                
-                // Winner leads next trick
-                simulationState.CurrentPlayerIndex = winnerId;
-            }
-            
-            // Return the final score based on tricks won
-            return Score3.FromThreePlayer(tricksWon, _declarerIndex);
-        }
-        
-        /// <summary>
-        /// Clones the PerfPerfectGameState for simulation purposes
-        /// </summary>
-        private static PerfPerfectGameState CloneState(PerfPerfectGameState original)
-        {
-            var clone = new PerfPerfectGameState(
-                original.GameMode, 
-                new List<string>(original.Players),
-                original.TrumpSuit,
-                original.CurrentPlayerIndex,
-                original.LeaderPlayerIndex);
-            
-            // Clone all moves
-            for (int suitIndex = 0; suitIndex < 4; suitIndex++)
-            {
-                foreach (var move in original.Moves[suitIndex])
-                {
-                    clone.Moves[suitIndex].Add(new PerfectCardMove(
-                        move.Card,
-                        move.PlayerIndex,
-                        move.ListIndex,
-                        move.Available
-                    ));
-                }
-            }
-            
-            return clone;
-        }
-        
-        /// <summary>
-        /// Checks if there are any moves remaining in the game
-        /// </summary>
-        private static bool HasMovesRemaining(PerfPerfectGameState state)
-        {
-            return state.Moves.Any(suitMoves => suitMoves.Any(m => m.Available));
-        }
-        
-        /// <summary>
-        /// Determines the winner of a trick (highest trump, or highest card in lead suit)
-        /// </summary>
-        private int DetermineWinner(PerfectCardMove leadMove, PerfectCardMove follow1, PerfectCardMove follow2)
-        {
-            var trumpSuit = _trumpSuit;
-            var leadSuit = leadMove.Card.Suit;
-            
-            // Check for trump cards
-            var trumpCards = new List<(PerfectCardMove move, int playerIndex)>();
-            
-            if (leadMove.Card.Suit == trumpSuit)
-                trumpCards.Add((leadMove, leadMove.PlayerIndex));
-            if (follow1.Card.Suit == trumpSuit)
-                trumpCards.Add((follow1, follow1.PlayerIndex));
-            if (follow2.Card.Suit == trumpSuit)
-                trumpCards.Add((follow2, follow2.PlayerIndex));
-            
-            // If there are trump cards, highest trump wins
-            if (trumpCards.Any())
-            {
-                return trumpCards.OrderByDescending(t => t.move.Card.Rank).First().playerIndex;
-            }
-            
-            // Otherwise, highest card in lead suit wins
-            var leadSuitCards = new List<(PerfectCardMove move, int playerIndex)>();
-            
-            if (leadMove.Card.Suit == leadSuit)
-                leadSuitCards.Add((leadMove, leadMove.PlayerIndex));
-            if (follow1.Card.Suit == leadSuit)
-                leadSuitCards.Add((follow1, follow1.PlayerIndex));
-            if (follow2.Card.Suit == leadSuit)
-                leadSuitCards.Add((follow2, follow2.PlayerIndex));
-            
-            return leadSuitCards.OrderByDescending(t => t.move.Card.Rank).First().playerIndex;
->>>>>>> 5015ec757ae89b84ab46aa4e20884bcdd7e1488d
         }
 
         /// <summary>
@@ -291,38 +141,33 @@ namespace GameOfCardsCsharp.Preferance.Trump
         private int SimulateTrick(PerfPerfectGameState state)
         {
             int leadPlayer = state.CurrentPlayerIndex;
-            
-            System.Diagnostics.Debug.WriteLine($"  Lead player: {leadPlayer}");
-            
+
             // Get lead card using heuristics
             var leadMove = SelectLeadCard(leadPlayer, leadPlayer == _declarerIndex, state.AnalyzeAllSuits(_declarerIndex), state);
-            System.Diagnostics.Debug.WriteLine($"  Lead card: {leadMove.Card} (Player {leadMove.PlayerIndex})");
-            
+
             // Mark lead card as played
             state.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = false;
-            
+
             // Advance to next player
             state.CurrentPlayerIndex = GetNextPlayer(state.CurrentPlayerIndex);
-            System.Diagnostics.Debug.WriteLine($"  Next player (1st follow): {state.CurrentPlayerIndex}");
-            
+
             // Get first follow card
             var firstFollowMove = SelectFollowCard(leadMove, null, state);
-            System.Diagnostics.Debug.WriteLine($"  1st follow card: {firstFollowMove.Card} (Player {firstFollowMove.PlayerIndex})");
             state.Moves[(int)firstFollowMove.Card.Suit][firstFollowMove.ListIndex].Available = false;
-            
+
             // Advance to next player
             state.CurrentPlayerIndex = GetNextPlayer(state.CurrentPlayerIndex);
-            
+
             // Get second follow card
             var secondFollowMove = SelectFollowCard(leadMove, firstFollowMove, state);
             state.Moves[(int)secondFollowMove.Card.Suit][secondFollowMove.ListIndex].Available = false;
-            
+
             // Determine winner
             int winner = DetermineWinner(leadMove, firstFollowMove, secondFollowMove);
-            
+
             // Set winner as next leader
             state.CurrentPlayerIndex = winner;
-            
+
             return winner;
         }
 
