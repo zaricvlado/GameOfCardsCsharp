@@ -134,7 +134,7 @@
                            FontSize="9"
                            TextColor="LightGray"
                            HorizontalOptions="Center"/>
-                    
+
                     <Label x:Name="RightPlayerTricksLabel"
                            Text="Tricks: 0"
                            FontSize="9"
@@ -439,6 +439,12 @@
                             <Label x:Name="AnalysisExpectedTricksLabel"
                                    FontSize="11"
                                    TextColor="#81C784"
+                                   LineBreakMode="WordWrap"
+                                   IsVisible="False"/>
+                            
+                            <Label x:Name="AnalysisPerformanceLabel"
+                                   FontSize="11"
+                                   TextColor="#64B5F6"
                                    LineBreakMode="WordWrap"
                                    IsVisible="False"/>
                         </VerticalStackLayout>
