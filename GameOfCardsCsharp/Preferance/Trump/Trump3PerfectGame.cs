@@ -46,14 +46,23 @@ namespace GameOfCardsCsharp.Preferance.Trump
         /// </summary>
         public List<PerfectCardMove> BestLeadCard()
         {
+            System.Diagnostics.Debug.WriteLine($"\n*** Trump3PerfectGame.BestLeadCard() called ***");
+            
             // Use heuristic game to select best lead
             var bestMove = _heuristicGame.BestLeadCard();
+            System.Diagnostics.Debug.WriteLine($"Best lead card selected: {bestMove.Card}");
             
             // Estimate the score if we play this lead
             var estimatedScore = _heuristicGame.EstimateScore();
             
+            System.Diagnostics.Debug.WriteLine($"Estimated score from EstimateScore(): Declarer={estimatedScore.DeclarerTricks}, Defenders={estimatedScore.DefendersTricks}");
+            System.Diagnostics.Debug.WriteLine($"Individual tricks: [{string.Join(", ", estimatedScore.IndividualTricks)}], Sum={estimatedScore.IndividualTricks.Sum()}");
+            
             // Attach expected tricks to the move
             var moveWithScore = bestMove.WithExpectedTricks(estimatedScore.IndividualTricks);
+            
+            System.Diagnostics.Debug.WriteLine($"Returning move with ExpectedTricks: [{string.Join(", ", moveWithScore.ExpectedTricks!)}]");
+            System.Diagnostics.Debug.WriteLine($"*** End BestLeadCard() ***\n");
             
             // Return as list (for consistency with Trump2PerfectGame API)
             return new List<PerfectCardMove> { moveWithScore };

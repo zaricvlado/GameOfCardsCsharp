@@ -70,12 +70,12 @@ namespace GameOfCardsCsharp.Preferance.Common
         /// Total tricks won by declarer(s)
         /// </summary>
         public int DeclarerTricks { get; }
-        
+
         /// <summary>
         /// Total tricks won by defender(s)
         /// </summary>
         public int DefendersTricks { get; }
-        
+
         /// <summary>
         /// Individual trick counts for each player [Player0, Player1, Player2]
         /// For 2-player games: Player2's count is 0
@@ -86,12 +86,12 @@ namespace GameOfCardsCsharp.Preferance.Common
         {
             DeclarerTricks = declarerTricks;
             DefendersTricks = defendersTricks;
-            
+
             if (individualTricks == null || (individualTricks.Length != 2 && individualTricks.Length != 3))
             {
                 throw new ArgumentException("IndividualTricks must have 2 or 3 elements", nameof(individualTricks));
             }
-            
+
             IndividualTricks = new int[3];
             Array.Copy(individualTricks, IndividualTricks, individualTricks.Length);
         }
@@ -105,10 +105,10 @@ namespace GameOfCardsCsharp.Preferance.Common
             individual[0] = player0Tricks;
             individual[1] = player1Tricks;
             individual[2] = 0;
-            
+
             var declarerTricks = declarerIndex == 0 ? player0Tricks : player1Tricks;
             var defendersTricks = declarerIndex == 0 ? player1Tricks : player0Tricks;
-            
+
             return new Score3(declarerTricks, defendersTricks, individual);
         }
 
@@ -121,10 +121,10 @@ namespace GameOfCardsCsharp.Preferance.Common
             {
                 throw new ArgumentException("Must provide exactly 3 trick counts", nameof(individualTricks));
             }
-            
+
             var declarerTricks = individualTricks[declarerIndex];
             var defendersTricks = individualTricks.Sum() - declarerTricks;
-            
+
             return new Score3(declarerTricks, defendersTricks, individualTricks);
         }
 
@@ -136,7 +136,7 @@ namespace GameOfCardsCsharp.Preferance.Common
             var newIndividual = new int[3];
             Array.Copy(IndividualTricks, newIndividual, 3);
             newIndividual[playerIndex]++;
-            
+
             return Score3.FromThreePlayer(newIndividual, declarerIndex);
         }
 
@@ -150,7 +150,7 @@ namespace GameOfCardsCsharp.Preferance.Common
             {
                 newIndividual[i] = IndividualTricks[i] + other.IndividualTricks[i];
             }
-            
+
             return new Score3(
                 DeclarerTricks + other.DeclarerTricks,
                 DefendersTricks + other.DefendersTricks,
@@ -186,12 +186,32 @@ namespace GameOfCardsCsharp.Preferance.Common
         public PerfectCardMove? StrongestCard { get; set; }
 
         /// <summary>
-        /// Expected tricks for declarer in this suit (assuming optimal cooperative play by defenders)
+        /// Expected tricks for declarer when declarer leads first in this suit
+        /// </summary>
+        public int DeclarerWinsIfDeclarerLeads { get; set; }
+
+        /// <summary>
+        /// Expected tricks for defenders when declarer leads first in this suit
+        /// </summary>
+        public int DefenderWinsIfDeclarerLeads { get; set; }
+
+        /// <summary>
+        /// Expected tricks for declarer when defender leads first in this suit
+        /// </summary>
+        public int DeclarerWinsIfDefenderLeads { get; set; }
+
+        /// <summary>
+        /// Expected tricks for defenders when defender leads first in this suit
+        /// </summary>
+        public int DefenderWinsIfDefenderLeads { get; set; }
+
+        /// <summary>
+        /// Expected tricks for declarer in this suit (old simple analysis)
         /// </summary>
         public int DeclarerWins { get; set; }
 
         /// <summary>
-        /// Expected tricks for defenders in this suit (assuming optimal cooperative play)
+        /// Expected tricks for defenders in this suit (old simple analysis)
         /// </summary>
         public int DefenderWins { get; set; }
 
@@ -209,8 +229,9 @@ namespace GameOfCardsCsharp.Preferance.Common
         {
             var strongestCardText = StrongestCard?.Card.ToString() ?? "None";
             return $"{Suit}: Strongest={strongestCardText} (P{StrongestCardOwner}), " +
-                   $"DeclWins={DeclarerWins}, DefWins={DefenderWins}, Total={TotalCardsInSuit}, " +
-                   $"Cards=[P0:{CardsPerPlayer[0]}, P1:{CardsPerPlayer[1]}, P2:{CardsPerPlayer[2]}]";
+                   $"DeclLeads: D={DeclarerWinsIfDeclarerLeads}/Def={DefenderWinsIfDeclarerLeads}, " +
+                   $"DefLeads: D={DeclarerWinsIfDefenderLeads}/Def={DefenderWinsIfDefenderLeads}, " +
+                   $"Total={TotalCardsInSuit}, Cards=[P0:{CardsPerPlayer[0]}, P1:{CardsPerPlayer[1]}, P2:{CardsPerPlayer[2]}]";
         }
     }
 
@@ -260,7 +281,7 @@ namespace GameOfCardsCsharp.Preferance.Common
             Players = players ?? throw new ArgumentNullException(nameof(players));
             CurrentPlayerIndex = currentPlayerIndex;
             LeaderPlayerIndex = leaderPlayerIndex;
-            
+
             // Initialize 4 lists for each suit
             Moves = new List<List<PerfectCardMove>>
             {
@@ -272,17 +293,18 @@ namespace GameOfCardsCsharp.Preferance.Common
         }
 
         /// <summary>
-        /// Analyzes a suit to estimate tricks for declarer vs defenders.
-        /// Simulates optimal play: declarer wins when they have strongest card,
-        /// defenders cooperate to minimize declarer tricks.
+        /// Analyzes a suit when declarer leads first.
+        /// First trick: If declarer has highest card, both defenders play smallest. 
+        /// If defender has highest card, declarer plays highest, defender wins with highest, other defender plays smallest.
+        /// Subsequent tricks: Whoever has highest card wins, losers play smallest.
         /// </summary>
         /// <param name="suit">The suit to analyze</param>
         /// <param name="declarerIndex">Index of the declarer (0, 1, or 2)</param>
-        /// <returns>Analysis result with estimated wins</returns>
-        public SuitAnalysis3Result AnalyzeSuit(Suit suit, int declarerIndex)
+        /// <returns>Analysis result with estimated wins when declarer leads</returns>
+        public SuitAnalysis3Result AnalyzeSuitDeclarerLeads(Suit suit, int declarerIndex)
         {
             var suitMoves = Moves[(int)suit];
-            
+
             // Track which cards are still "in play" for this simulation
             var inPlay = new bool[suitMoves.Count];
             for (int i = 0; i < suitMoves.Count; i++)
@@ -304,7 +326,363 @@ namespace GameOfCardsCsharp.Preferance.Common
             // Find who has the strongest card
             int strongestCardOwner = -1;
             PerfectCardMove? strongestCard = null;
-            
+
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                if (inPlay[i])
+                {
+                    strongestCardOwner = suitMoves[i].PlayerIndex;
+                    strongestCard = suitMoves[i];
+                    break;
+                }
+            }
+
+            // Count cards per player
+            var cardsPerPlayer = new int[3];
+            foreach (var move in suitMoves.Where(m => m.Available))
+            {
+                cardsPerPlayer[move.PlayerIndex]++;
+            }
+
+            bool isFirstTrick = true;
+
+            // Simulate tricks until no more cards
+            while (true)
+            {
+                // Find highest card still in play
+                int highestIdx = -1;
+                for (int i = 0; i < suitMoves.Count; i++)
+                {
+                    if (inPlay[i])
+                    {
+                        highestIdx = i;
+                        break;
+                    }
+                }
+
+                if (highestIdx == -1)
+                    break; // No more cards
+
+                var highestMove = suitMoves[highestIdx];
+                int highestOwner = highestMove.PlayerIndex;
+
+                // Check if declarer has the highest card
+                if (highestOwner == declarerIndex)
+                {
+                    // Declarer wins this trick
+                    declarerWins++;
+                    inPlay[highestIdx] = false;
+
+                    // Both defenders play their smallest cards
+                    for (int defIdx = 0; defIdx < defenderIndices.Count; defIdx++)
+                    {
+                        int defenderId = defenderIndices[defIdx];
+                        int smallestDefenderCard = FindSmallestCardIndex(suitMoves, inPlay, defenderId);
+
+                        if (smallestDefenderCard != -1)
+                        {
+                            inPlay[smallestDefenderCard] = false;
+                        }
+                    }
+                }
+                else
+                {
+                    // Defender has highest card - defender wins
+                    defenderWins++;
+                    inPlay[highestIdx] = false;
+
+                    // Special handling for first trick: declarer leads, so plays highest (not smallest)
+                    int declarerCardToPlay;
+                    if (isFirstTrick)
+                    {
+                        // Declarer plays highest card (best attempt to win)
+                        declarerCardToPlay = FindHighestCardIndex(suitMoves, inPlay, declarerIndex);
+                    }
+                    else
+                    {
+                        // Subsequent tricks: declarer plays smallest
+                        declarerCardToPlay = FindSmallestCardIndex(suitMoves, inPlay, declarerIndex);
+                    }
+
+                    if (declarerCardToPlay != -1)
+                    {
+                        inPlay[declarerCardToPlay] = false;
+                    }
+
+                    // Other defender plays smallest card (if has any)
+                    int otherDefender = defenderIndices.First(d => d != highestOwner);
+                    int smallestOtherDefCard = FindSmallestCardIndex(suitMoves, inPlay, otherDefender);
+                    if (smallestOtherDefCard != -1)
+                    {
+                        inPlay[smallestOtherDefCard] = false;
+                    }
+                }
+
+                isFirstTrick = false;
+            }
+
+            // Count total cards in suit
+            int totalCards = suitMoves.Count(m => m.Available);
+
+            return new SuitAnalysis3Result
+            {
+                Suit = suit,
+                StrongestCardOwner = strongestCardOwner,
+                StrongestCard = strongestCard,
+                DeclarerWinsIfDeclarerLeads = declarerWins,
+                DefenderWinsIfDeclarerLeads = defenderWins,
+                TotalCardsInSuit = totalCards,
+                CardsPerPlayer = cardsPerPlayer
+            };
+        }
+
+        /// <summary>
+        /// Analyzes a suit when defender leads first.
+        /// First trick: If defender has highest card, declarer plays smallest, both defenders coordinate. 
+        /// If declarer has highest card, defender leads with highest, declarer wins with highest, other defender plays smallest.
+        /// Subsequent tricks: Whoever has highest card wins, losers play smallest.
+        /// </summary>
+        /// <param name="suit">The suit to analyze</param>
+        /// <param name="declarerIndex">Index of the declarer (0, 1, or 2)</param>
+        /// <returns>Analysis result with estimated wins when defender leads</returns>
+        public SuitAnalysis3Result AnalyzeSuitDefenderLeads(Suit suit, int declarerIndex)
+        {
+            var suitMoves = Moves[(int)suit];
+
+            // Track which cards are still "in play" for this simulation
+            var inPlay = new bool[suitMoves.Count];
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                inPlay[i] = suitMoves[i].Available;
+            }
+
+            int declarerWins = 0;
+            int defenderWins = 0;
+
+            // Defender indices
+            var defenderIndices = new List<int>();
+            for (int i = 0; i < 3; i++)
+            {
+                if (i != declarerIndex)
+                    defenderIndices.Add(i);
+            }
+
+            // Find who has the strongest card
+            int strongestCardOwner = -1;
+            PerfectCardMove? strongestCard = null;
+
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                if (inPlay[i])
+                {
+                    strongestCardOwner = suitMoves[i].PlayerIndex;
+                    strongestCard = suitMoves[i];
+                    break;
+                }
+            }
+
+            // Count cards per player
+            var cardsPerPlayer = new int[3];
+            foreach (var move in suitMoves.Where(m => m.Available))
+            {
+                cardsPerPlayer[move.PlayerIndex]++;
+            }
+
+            bool isFirstTrick = true;
+
+            // Simulate tricks until no more cards
+            while (true)
+            {
+                // Find highest card still in play
+                int highestIdx = -1;
+                for (int i = 0; i < suitMoves.Count; i++)
+                {
+                    if (inPlay[i])
+                    {
+                        highestIdx = i;
+                        break;
+                    }
+                }
+
+                if (highestIdx == -1)
+                    break; // No more cards
+
+                var highestMove = suitMoves[highestIdx];
+                int highestOwner = highestMove.PlayerIndex;
+
+                // Check if declarer has the highest card
+                if (highestOwner == declarerIndex)
+                {
+                    // Declarer wins this trick
+                    declarerWins++;
+                    inPlay[highestIdx] = false;
+
+                    // Special handling for first trick: defender leads, so first defender plays highest (not smallest)
+                    if (isFirstTrick && defenderIndices.Count > 0)
+                    {
+                        // First defender plays highest card (best attempt to win)
+                        int firstDefenderHighest = FindHighestCardIndex(suitMoves, inPlay, defenderIndices[0]);
+                        if (firstDefenderHighest != -1)
+                        {
+                            inPlay[firstDefenderHighest] = false;
+                        }
+
+                        // Second defender plays smallest
+                        if (defenderIndices.Count > 1)
+                        {
+                            int secondDefenderSmallest = FindSmallestCardIndex(suitMoves, inPlay, defenderIndices[1]);
+                            if (secondDefenderSmallest != -1)
+                            {
+                                inPlay[secondDefenderSmallest] = false;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Subsequent tricks: both defenders play smallest
+                        for (int defIdx = 0; defIdx < defenderIndices.Count; defIdx++)
+                        {
+                            int defenderId = defenderIndices[defIdx];
+                            int smallestDefenderCard = FindSmallestCardIndex(suitMoves, inPlay, defenderId);
+
+                            if (smallestDefenderCard != -1)
+                            {
+                                inPlay[smallestDefenderCard] = false;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Defender has highest card - defender wins
+                    defenderWins++;
+                    inPlay[highestIdx] = false;
+
+                    // Declarer plays smallest card (if has any)
+                    int smallestDeclarerCard = FindSmallestCardIndex(suitMoves, inPlay, declarerIndex);
+                    if (smallestDeclarerCard != -1)
+                    {
+                        inPlay[smallestDeclarerCard] = false;
+                    }
+
+                    // Other defender plays smallest card (if has any)
+                    int otherDefender = defenderIndices.First(d => d != highestOwner);
+                    int smallestOtherDefCard = FindSmallestCardIndex(suitMoves, inPlay, otherDefender);
+                    if (smallestOtherDefCard != -1)
+                    {
+                        inPlay[smallestOtherDefCard] = false;
+                    }
+                }
+
+                isFirstTrick = false;
+            }
+
+            // Count total cards in suit
+            int totalCards = suitMoves.Count(m => m.Available);
+
+            return new SuitAnalysis3Result
+            {
+                Suit = suit,
+                StrongestCardOwner = strongestCardOwner,
+                StrongestCard = strongestCard,
+                DeclarerWinsIfDefenderLeads = declarerWins,
+                DefenderWinsIfDefenderLeads = defenderWins,
+                TotalCardsInSuit = totalCards,
+                CardsPerPlayer = cardsPerPlayer
+            };
+        }
+
+        /// <summary>
+        /// Analyzes a suit comprehensively by evaluating both scenarios:
+        /// when declarer leads first and when defender leads first.
+        /// This provides complete information for optimal decision making.
+        /// </summary>
+        /// <param name="suit">The suit to analyze</param>
+        /// <param name="declarerIndex">Index of the declarer (0, 1, or 2)</param>
+        /// <returns>Analysis result with estimated wins for both scenarios</returns>
+        public SuitAnalysis3Result AnalyzeSuit(Suit suit, int declarerIndex)
+        {
+            var suitMoves = Moves[(int)suit];
+
+            // Find who has the strongest card
+            int strongestCardOwner = -1;
+            PerfectCardMove? strongestCard = null;
+
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                if (suitMoves[i].Available)
+                {
+                    strongestCardOwner = suitMoves[i].PlayerIndex;
+                    strongestCard = suitMoves[i];
+                    break;
+                }
+            }
+
+            // Count cards per player
+            var cardsPerPlayer = new int[3];
+            foreach (var move in suitMoves.Where(m => m.Available))
+            {
+                cardsPerPlayer[move.PlayerIndex]++;
+            }
+
+            // Count total cards in suit
+            int totalCards = suitMoves.Count(m => m.Available);
+
+            // Analyze both scenarios
+            var declarerLeadsResult = AnalyzeSuitDeclarerLeads(suit, declarerIndex);
+            var defenderLeadsResult = AnalyzeSuitDefenderLeads(suit, declarerIndex);
+
+            // Also run the old simple analysis for backward compatibility
+            var simpleResult = AnalyzeSuitSimple(suit, declarerIndex);
+
+            // Return comprehensive result combining both analyses
+            return new SuitAnalysis3Result
+            {
+                Suit = suit,
+                StrongestCardOwner = strongestCardOwner,
+                StrongestCard = strongestCard,
+                DeclarerWinsIfDeclarerLeads = declarerLeadsResult.DeclarerWinsIfDeclarerLeads,
+                DefenderWinsIfDeclarerLeads = declarerLeadsResult.DefenderWinsIfDeclarerLeads,
+                DeclarerWinsIfDefenderLeads = defenderLeadsResult.DeclarerWinsIfDefenderLeads,
+                DefenderWinsIfDefenderLeads = defenderLeadsResult.DefenderWinsIfDefenderLeads,
+                DeclarerWins = simpleResult.DeclarerWins,
+                DefenderWins = simpleResult.DefenderWins,
+                TotalCardsInSuit = totalCards,
+                CardsPerPlayer = cardsPerPlayer
+            };
+        }
+
+        /// <summary>
+        /// Simple suit analysis - old algorithm for backward compatibility.
+        /// Simulates optimal play: declarer wins when they have strongest card,
+        /// defenders cooperate to minimize declarer tricks.
+        /// </summary>
+        private SuitAnalysis3Result AnalyzeSuitSimple(Suit suit, int declarerIndex)
+        {
+            var suitMoves = Moves[(int)suit];
+
+            // Track which cards are still "in play" for this simulation
+            var inPlay = new bool[suitMoves.Count];
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                inPlay[i] = suitMoves[i].Available;
+            }
+
+            int declarerWins = 0;
+            int defenderWins = 0;
+
+            // Defender indices
+            var defenderIndices = new List<int>();
+            for (int i = 0; i < 3; i++)
+            {
+                if (i != declarerIndex)
+                    defenderIndices.Add(i);
+            }
+
+            // Find who has the strongest card
+            int strongestCardOwner = -1;
+            PerfectCardMove? strongestCard = null;
+
             for (int i = 0; i < suitMoves.Count; i++)
             {
                 if (inPlay[i])
@@ -354,7 +732,7 @@ namespace GameOfCardsCsharp.Preferance.Common
                     {
                         int defenderId = defenderIndices[defIdx];
                         int smallestDefenderCard = FindSmallestCardIndex(suitMoves, inPlay, defenderId);
-                        
+
                         if (smallestDefenderCard != -1)
                         {
                             inPlay[smallestDefenderCard] = false;
@@ -381,19 +759,6 @@ namespace GameOfCardsCsharp.Preferance.Common
                     {
                         inPlay[smallestOtherDefCard] = false;
                     }
-                }
-            }
-
-            // Count remaining cards that weren't simulated (edge case)
-            for (int i = 0; i < suitMoves.Count; i++)
-            {
-                if (inPlay[i])
-                {
-                    // Award remaining cards to their owner
-                    if (suitMoves[i].PlayerIndex == declarerIndex)
-                        declarerWins++;
-                    else
-                        defenderWins++;
                 }
             }
 
@@ -429,18 +794,34 @@ namespace GameOfCardsCsharp.Preferance.Common
         }
 
         /// <summary>
-        /// Analyzes all four suits and returns combined results
+        /// Finds the highest card index for a specific player in the suit
+        /// </summary>
+        private int FindHighestCardIndex(List<PerfectCardMove> suitMoves, bool[] inPlay, int playerIndex)
+        {
+            // Search from beginning (highest cards) towards end
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                if (inPlay[i] && suitMoves[i].PlayerIndex == playerIndex)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Analyzes all four suits and returns combined results with both scenarios
         /// </summary>
         public List<SuitAnalysis3Result> AnalyzeAllSuits(int declarerIndex)
         {
             var results = new List<SuitAnalysis3Result>();
-            
+
             for (int suitIndex = 0; suitIndex < 4; suitIndex++)
             {
                 var suit = (Suit)suitIndex;
                 results.Add(AnalyzeSuit(suit, declarerIndex));
             }
-            
+
             return results;
         }
 
@@ -470,7 +851,7 @@ namespace GameOfCardsCsharp.Preferance.Common
 
                 if (playerIndex < 0 || playerIndex >= Players.Count)
                 {
-                    throw new ArgumentOutOfRangeException(nameof(playerHands), 
+                    throw new ArgumentOutOfRangeException(nameof(playerHands),
                         $"Player index {playerIndex} is out of range (0-{Players.Count - 1})");
                 }
 
@@ -515,7 +896,7 @@ namespace GameOfCardsCsharp.Preferance.Common
             {
                 int suitIndex = (int)card.Suit;
                 var suitMoves = Moves[suitIndex];
-                
+
                 var move = new PerfectCardMove(
                     card: card,
                     playerIndex: playerIndex,
@@ -539,10 +920,10 @@ namespace GameOfCardsCsharp.Preferance.Common
         private void SortAndReindexSuit(int suitIndex)
         {
             var suitMoves = Moves[suitIndex];
-            
+
             // Sort by rank descending (Ace > King > Queen > ... > Two)
             var sorted = suitMoves.OrderByDescending(m => m.Card.Rank).ToList();
-            
+
             // Clear and re-add with correct indices
             suitMoves.Clear();
             for (int i = 0; i < sorted.Count; i++)
@@ -575,7 +956,7 @@ namespace GameOfCardsCsharp.Preferance.Common
             {
                 throw new ArgumentOutOfRangeException(nameof(playerIndex));
             }
-            
+
             LeaderPlayerIndex = playerIndex;
             CurrentPlayerIndex = playerIndex;
         }
@@ -667,6 +1048,45 @@ namespace GameOfCardsCsharp.Preferance.Common
         public IEnumerable<PerfectCardMove> GetAvailableMovesForCurrentPlayer()
         {
             return GetAvailableMovesForPlayer(CurrentPlayerIndex);
+        }
+
+        /// <summary>
+        /// Creates a deep clone of this game state for simulation purposes
+        /// </summary>
+        public PerfPerfectGameState Clone()
+        {
+            var clonedMoves = new List<List<PerfectCardMove>>();
+            
+            foreach (var suitMoves in Moves)
+            {
+                var clonedSuitMoves = new List<PerfectCardMove>();
+                foreach (var move in suitMoves)
+                {
+                    clonedSuitMoves.Add(new PerfectCardMove(
+                        move.Card,
+                        move.PlayerIndex,
+                        move.ListIndex,
+                        move.Available,
+                        move.ExpectedTricks != null ? (int[])move.ExpectedTricks.Clone() : null
+                    ));
+                }
+                clonedMoves.Add(clonedSuitMoves);
+            }
+            
+            // Create a new state with cloned data
+            var clonedState = new PerfPerfectGameState(
+                GameMode,                          // 1st param: PreferanceGameMode
+                Players.ToList(),                  // 2nd param: List<string>
+                TrumpSuit,                         // 3rd param: TrumpSuit
+                CurrentPlayerIndex,                // 4th param: int currentPlayerIndex
+                LeaderPlayerIndex                  // 5th param: int leaderPlayerIndex
+            );
+            
+            // Replace the empty Moves with our cloned moves
+            clonedState.Moves.Clear();
+            clonedState.Moves.AddRange(clonedMoves);
+            
+            return clonedState;
         }
     }
 }

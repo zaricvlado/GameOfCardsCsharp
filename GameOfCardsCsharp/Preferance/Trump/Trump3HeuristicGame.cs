@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using GameOfCardsCsharp.Preferance.Common;
 
 namespace GameOfCardsCsharp.Preferance.Trump
@@ -81,7 +80,7 @@ namespace GameOfCardsCsharp.Preferance.Trump
             // Clear previous signal (new trick starting)
             _lastLeadSignal = null;
             
-            return SelectLeadCard(currentPlayer, isCurrentDeclarer, suitAnalyses);
+            return SelectLeadCard(currentPlayer, isCurrentDeclarer, suitAnalyses, _state);
         }
 
         /// <summary>
@@ -102,55 +101,412 @@ namespace GameOfCardsCsharp.Preferance.Trump
             
             if (isSecondPlayer)
             {
-                return SelectSecondPlayerFollow(leadMove, leadPlayer, currentPlayer, suitAnalyses);
+                return SelectSecondPlayerFollow(leadMove, leadPlayer, currentPlayer, suitAnalyses, _state);
             }
             else
             {
-                return SelectThirdPlayerFollow(leadMove, firstFollowMove, leadPlayer, currentPlayer, suitAnalyses);
+                return SelectThirdPlayerFollow(leadMove, firstFollowMove, leadPlayer, currentPlayer, suitAnalyses, _state);
             }
         }
 
         /// <summary>
-        /// Estimates the final Score3 by simulating the game using heuristics
+        /// Estimates the final Score3 by simulating the game using heuristics.
+        /// This method plays out all remaining tricks using heuristic moves.
         /// </summary>
         public Score3 EstimateScore()
         {
-            // Simple initial estimate: sum up suit analyses
-            var suitAnalyses = _state.AnalyzeAllSuits(_declarerIndex);
+            // Clone state to avoid modifying the original
+            var simulationState = _state.Clone();
             
-            int totalDeclarerWins = suitAnalyses.Sum(a => a.DeclarerWins);
-            int totalDefenderWins = suitAnalyses.Sum(a => a.DefenderWins);
+            // DEBUG: Count initial cards
+            int totalCards = 0;
+            int[] cardsPerPlayer = new int[3];
+            for (int i = 0; i < 3; i++)
+            {
+                cardsPerPlayer[i] = simulationState.GetAvailableMovesForPlayer(i).Count();
+                totalCards += cardsPerPlayer[i];
+            }
+            System.Diagnostics.Debug.WriteLine($"=== EstimateScore START ===");
+            System.Diagnostics.Debug.WriteLine($"Total cards: {totalCards}");
+            System.Diagnostics.Debug.WriteLine($"Cards per player: P0={cardsPerPlayer[0]}, P1={cardsPerPlayer[1]}, P2={cardsPerPlayer[2]}");
+            System.Diagnostics.Debug.WriteLine($"Expected tricks to simulate: {totalCards / 3}");
             
-            // For individual tricks, we'd need to simulate actual play
-            // For now, approximate based on card distribution
-            var individual = new int[3];
-            individual[_declarerIndex] = totalDeclarerWins;
+            // Track tricks won by each player during simulation
+            int[] tricksWonDuringSimulation = new int[3];
             
-            // Split defender wins (rough approximation - could be improved)
-            individual[_defenderIndices[0]] = totalDefenderWins / 2;
-            individual[_defenderIndices[1]] = totalDefenderWins - individual[_defenderIndices[0]];
+            int trickCounter = 0;
             
-            return Score3.FromThreePlayer(individual, _declarerIndex);
+            // Simulate all remaining tricks
+            while (HasRemainingCards(simulationState))
+            {
+                trickCounter++;
+                System.Diagnostics.Debug.WriteLine($"\n--- Simulating Trick {trickCounter} ---");
+                System.Diagnostics.Debug.WriteLine($"Current player before trick: {simulationState.CurrentPlayerIndex}");
+                
+                // Get current player
+                int currentPlayer = simulationState.CurrentPlayerIndex;
+                
+                // Play out one complete trick
+                var trickWinner = SimulateTrick(simulationState);
+                
+                System.Diagnostics.Debug.WriteLine($"Trick {trickCounter} winner: Player {trickWinner}");
+                
+                // Record the trick winner
+                tricksWonDuringSimulation[trickWinner]++;
+                
+                System.Diagnostics.Debug.WriteLine($"Current tricks: [{string.Join(", ", tricksWonDuringSimulation)}], Sum={tricksWonDuringSimulation.Sum()}");
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"\n=== EstimateScore END ===");
+            System.Diagnostics.Debug.WriteLine($"Total tricks simulated: {trickCounter}");
+            System.Diagnostics.Debug.WriteLine($"Final tricksWonDuringSimulation: [{string.Join(", ", tricksWonDuringSimulation)}]");
+            System.Diagnostics.Debug.WriteLine($"Sum: {tricksWonDuringSimulation.Sum()}");
+            System.Diagnostics.Debug.WriteLine($"=========================\n");
+            
+            return Score3.FromThreePlayer(tricksWonDuringSimulation, _declarerIndex);
         }
 
-        // ==================== LEAD SELECTION ====================
+        /// <summary>
+        /// Simulates a single trick and returns the winner's index.
+        /// Uses heuristic logic to select cards for each player.
+        /// </summary>
+        private int SimulateTrick(PerfPerfectGameState state)
+        {
+            int leadPlayer = state.CurrentPlayerIndex;
+            
+            System.Diagnostics.Debug.WriteLine($"  Lead player: {leadPlayer}");
+            
+            // Get lead card using heuristics
+            var leadMove = SelectLeadCard(leadPlayer, leadPlayer == _declarerIndex, state.AnalyzeAllSuits(_declarerIndex), state);
+            System.Diagnostics.Debug.WriteLine($"  Lead card: {leadMove.Card} (Player {leadMove.PlayerIndex})");
+            
+            // Mark lead card as played
+            state.Moves[(int)leadMove.Card.Suit][leadMove.ListIndex].Available = false;
+            
+            // Advance to next player
+            state.CurrentPlayerIndex = GetNextPlayer(state.CurrentPlayerIndex);
+            System.Diagnostics.Debug.WriteLine($"  Next player (1st follow): {state.CurrentPlayerIndex}");
+            
+            // Get first follow card
+            var firstFollowMove = SelectFollowCard(leadMove, null, state);
+            System.Diagnostics.Debug.WriteLine($"  1st follow card: {firstFollowMove.Card} (Player {firstFollowMove.PlayerIndex})");
+            state.Moves[(int)firstFollowMove.Card.Suit][firstFollowMove.ListIndex].Available = false;
+            
+            // Advance to next player
+            state.CurrentPlayerIndex = GetNextPlayer(state.CurrentPlayerIndex);
+            
+            // Get second follow card
+            var secondFollowMove = SelectFollowCard(leadMove, firstFollowMove, state);
+            state.Moves[(int)secondFollowMove.Card.Suit][secondFollowMove.ListIndex].Available = false;
+            
+            // Determine winner
+            int winner = DetermineWinner(leadMove, firstFollowMove, secondFollowMove);
+            
+            // Set winner as next leader
+            state.CurrentPlayerIndex = winner;
+            
+            return winner;
+        }
 
+        /// <summary>
+        /// Selects a follow card using heuristic analysis (reuses existing logic)
+        /// </summary>
+        private PerfectCardMove SelectFollowCard(PerfectCardMove leadMove, PerfectCardMove? firstFollowMove, PerfPerfectGameState state)
+        {
+            int currentPlayer = state.CurrentPlayerIndex;
+            int leadPlayer = leadMove.PlayerIndex;
+            bool isSecondPlayer = (firstFollowMove == null);
+            
+            // Calculate suit analyses once for this trick
+            var suitAnalyses = state.AnalyzeAllSuits(_declarerIndex);
+            
+            if (isSecondPlayer)
+            {
+                return SelectSecondPlayerFollow(leadMove, leadPlayer, currentPlayer, suitAnalyses, state);
+            }
+            else
+            {
+                return SelectThirdPlayerFollow(leadMove, firstFollowMove, leadPlayer, currentPlayer, suitAnalyses, state);
+            }
+        }
+
+        /// <summary>
+        /// Determines the winner of a trick given three cards
+        /// </summary>
+        private int DetermineWinner(PerfectCardMove leadMove, PerfectCardMove firstFollowMove, PerfectCardMove secondFollowMove)
+        {
+            // Collect all three moves
+            var moves = new[] { leadMove, firstFollowMove, secondFollowMove };
+            
+            // Find trump cards
+            var trumpCards = moves.Where(m => m.Card.Suit == _trumpSuit).ToArray();
+            
+            if (trumpCards.Any())
+            {
+                // At least one trump card - highest trump wins
+                var winningMove = trumpCards.OrderByDescending(m => m.Card.Rank).First();
+                return winningMove.PlayerIndex;
+            }
+            
+            // No trumps - highest card in lead suit wins
+            var leadSuit = leadMove.Card.Suit;
+            var followingSuit = moves.Where(m => m.Card.Suit == leadSuit).ToArray();
+            
+            if (followingSuit.Any())
+            {
+                var winningMove = followingSuit.OrderByDescending(m => m.Card.Rank).First();
+                return winningMove.PlayerIndex;
+            }
+            
+            // Only lead card followed suit (others discarded) - lead wins
+            return leadMove.PlayerIndex;
+        }
+
+        /// <summary>
+        /// Checks if there are remaining cards to play
+        /// </summary>
+        private bool HasRemainingCards(PerfPerfectGameState state)
+        {
+            // Check if current player has any cards
+            return state.GetAvailableMovesForPlayer(state.CurrentPlayerIndex).Any();
+        }
+
+        /// <summary>
+        /// Gets the next player index in rotation
+        /// </summary>
+        private int GetNextPlayer(int currentPlayer)
+        {
+            return (currentPlayer + 1) % 3;
+        }
+
+        /// <summary>
+        /// Selects optimal trump for Defender to play when cannot follow suit
+        /// </summary>
+        private PerfectCardMove SelectDefenderTrump(
+            List<PerfectCardMove> trumpMoves,
+            Suit leadSuit,
+            bool isSecondPlayer,
+            int currentDefender,
+            PerfPerfectGameState state)
+        {
+            var declarerTrumpMoves = state.Moves[(int)_trumpSuit]
+                .Where(m => m.Available && m.PlayerIndex == _declarerIndex)
+                .ToList();
+
+            if (isSecondPlayer)
+            {
+                // DEFENDER IS SECOND PLAYER - Declarer plays after
+                
+                // Check if declarer can follow suit
+                var declarerLeadSuitMoves = state.Moves[(int)leadSuit]
+                    .Where(m => m.Available && m.PlayerIndex == _declarerIndex)
+                    .ToList();
+
+                if (declarerLeadSuitMoves.Any())
+                {
+                    // Declarer CAN follow suit - won't trump
+                    // Play smallest trump
+                    return trumpMoves.Last();
+                }
+                else
+                {
+                    // Declarer CANNOT follow suit - will trump
+                    if (!declarerTrumpMoves.Any())
+                    {
+                        // Declarer has no trump - play smallest
+                        return trumpMoves.Last();
+                    }
+
+                    // Find declarer's highest trump
+                    var highestDeclarerTrump = declarerTrumpMoves.First();
+
+                    // Try to play smallest trump that beats declarer's highest
+                    var beatingTrumps = trumpMoves
+                        .Where(m => m.Card.Rank > highestDeclarerTrump.Card.Rank)
+                        .ToList();
+
+                    if (beatingTrumps.Any())
+                    {
+                        // Play smallest trump that beats declarer's highest
+                        return beatingTrumps.Last();
+                    }
+                    else
+                    {
+                        // Can't beat - play LARGEST trump to force declarer to waste high trump
+                        return trumpMoves.First();
+                    }
+                }
+            }
+            else
+            {
+                // DEFENDER IS LAST PLAYER (3rd position) - Declarer already played
+                
+                // Check what declarer played (need to look at trick history or state)
+                // For now, check if declarer played trump in this trick
+                var declarerPlayedTrump = CheckIfDeclarerPlayedTrumpInCurrentTrick();
+
+                if (declarerPlayedTrump != null)
+                {
+                    // Declarer played trump - try to beat it
+                    var beatingTrumps = trumpMoves
+                        .Where(m => m.Card.Rank > declarerPlayedTrump.Card.Rank)
+                        .ToList();
+
+                    if (beatingTrumps.Any())
+                    {
+                        // Play smallest trump that beats declarer's
+                        return beatingTrumps.Last();
+                    }
+                    else
+                    {
+                        // Can't beat - play smallest trump
+                        return trumpMoves.Last();
+                    }
+                }
+                else
+                {
+                    // Declarer didn't play trump - play smallest trump
+                    return trumpMoves.Last();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Selects optimal trump for Declarer to play when cannot follow suit
+        /// </summary>
+        private PerfectCardMove SelectDeclarerTrump(
+            List<PerfectCardMove> trumpMoves,
+            Suit leadSuit,
+            bool isSecondPlayer,
+            int declarerIndex,
+            PerfPerfectGameState state)
+        {
+            if (isSecondPlayer)
+            {
+                // DECLARER IS SECOND PLAYER - one Defender plays after
+                
+                // Determine which defender plays after
+                int nextDefenderIndex = GetNextPlayerIndex(state.CurrentPlayerIndex);
+
+                // Check if next defender can follow suit
+                var defenderLeadSuitMoves = state.Moves[(int)leadSuit]
+                    .Where(m => m.Available && m.PlayerIndex == nextDefenderIndex)
+                    .ToList();
+
+                if (defenderLeadSuitMoves.Any())
+                {
+                    // Defender CAN follow suit - won't trump
+                    // Play smallest trump
+                    return trumpMoves.Last();
+                }
+                else
+                {
+                    // Defender CANNOT follow suit - will trump
+                    var defenderTrumpMoves = state.Moves[(int)_trumpSuit]
+                        .Where(m => m.Available && m.PlayerIndex == nextDefenderIndex)
+                        .ToList();
+
+                    if (!defenderTrumpMoves.Any())
+                    {
+                        // Defender has no trump - play smallest
+                        return trumpMoves.Last();
+                    }
+
+                    // Find defender's highest trump
+                    var highestDefenderTrump = defenderTrumpMoves.First();
+
+                    // Try to play smallest trump that beats defender's highest
+                    var beatingTrumps = trumpMoves
+                        .Where(m => m.Card.Rank > highestDefenderTrump.Card.Rank)
+                        .ToList();
+
+                    if (beatingTrumps.Any())
+                    {
+                        // Play smallest trump that beats defender's highest
+                        return beatingTrumps.Last();
+                    }
+                    else
+                    {
+                        // Can't beat - play LARGEST trump to force defender to waste high trump
+                        return trumpMoves.First();
+                    }
+                }
+            }
+            else
+            {
+                // DECLARER IS LAST PLAYER (3rd position) - check what defenders played
+                
+                var defendersPlayedTrump = CheckIfAnyDefenderPlayedTrumpInCurrentTrick();
+
+                if (defendersPlayedTrump != null)
+                {
+                    // Defender played trump - try to beat it
+                    var beatingTrumps = trumpMoves
+                        .Where(m => m.Card.Rank > defendersPlayedTrump.Card.Rank)
+                        .ToList();
+
+                    if (beatingTrumps.Any())
+                    {
+                        // Play smallest trump that beats defender's
+                        return beatingTrumps.Last();
+                    }
+                    else
+                    {
+                        // Can't beat - play smallest trump
+                        return trumpMoves.Last();
+                    }
+                }
+                else
+                {
+                    // No defender played trump - play smallest trump
+                    return trumpMoves.Last();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks if declarer played trump in the current trick
+        /// Returns the trump card played, or null if didn't play trump
+        /// </summary>
+        private PerfectCardMove? CheckIfDeclarerPlayedTrumpInCurrentTrick()
+        {
+            // This requires tracking trick state - for now return null
+            // In a full implementation, you'd track cards played in current trick
+            // TODO: Implement proper trick tracking
+            return null;
+        }
+
+        /// <summary>
+        /// Checks if any defender played trump in the current trick
+        /// Returns the highest trump card played by defenders, or null if no trump played
+        /// </summary>
+        private PerfectCardMove? CheckIfAnyDefenderPlayedTrumpInCurrentTrick()
+        {
+            // This requires tracking trick state - for now return null
+            // TODO: Implement proper trick tracking
+            return null;
+        }
+
+        /// <summary>
+        /// Returns the best lead card using heuristic analysis
+        /// </summary>
         private PerfectCardMove SelectLeadCard(
             int currentPlayer, 
             bool isCurrentDeclarer, 
-            List<SuitAnalysis3Result> suitAnalyses)
+            List<SuitAnalysis3Result> suitAnalyses,
+            PerfPerfectGameState state)
         {
             // Declarer logic: simple, no partner coordination
             if (isCurrentDeclarer)
             {
-                return SelectDeclarerLeadCard(currentPlayer, suitAnalyses);
+                return SelectDeclarerLeadCard(currentPlayer, suitAnalyses, state);
             }
 
             // Defender logic: coordinate with partner
-            return SelectDefenderLeadCard(currentPlayer, suitAnalyses);
+            return SelectDefenderLeadCard(currentPlayer, suitAnalyses, state);
         }
 
-        private PerfectCardMove SelectDeclarerLeadCard(int declarerIndex, List<SuitAnalysis3Result> suitAnalyses)
+        private PerfectCardMove SelectDeclarerLeadCard(int declarerIndex, List<SuitAnalysis3Result> suitAnalyses, PerfPerfectGameState state)
         {
             // Filter suits where declarer has cards
             var availableSuits = suitAnalyses
@@ -160,32 +516,69 @@ namespace GameOfCardsCsharp.Preferance.Trump
             if (!availableSuits.Any())
             {
                 // Fallback: play any available card
-                return _state.GetAvailableMovesForPlayer(declarerIndex).First();
+                return state.GetAvailableMovesForPlayer(declarerIndex).First();
             }
 
-            // Priority 1: Lead from suit where declarer has strongest card
-            var controlledSuits = availableSuits
-                .Where(a => a.StrongestCardOwner == declarerIndex)
-                .OrderByDescending(a => a.DeclarerWins)
-                .ThenByDescending(a => a.TotalCardsInSuit)
+            // Priority 1: Lead from suits where leading doesn't matter (same result either way)
+            // These are "safe" suits where declarer doesn't lose first-mover advantage
+            var safeSuits = availableSuits
+                .Where(a => a.DeclarerWinsIfDeclarerLeads == a.DeclarerWinsIfDefenderLeads)
                 .ToList();
 
-            if (controlledSuits.Any())
+            if (safeSuits.Any())
             {
-                var bestSuit = controlledSuits.First();
-                return bestSuit.StrongestCard; // Play the strongest card
+                // Among safe suits, prefer those where declarer has strongest card
+                var controlledSafeSuits = safeSuits
+                    .Where(a => a.StrongestCardOwner == declarerIndex)
+                    .OrderByDescending(a => a.DeclarerWinsIfDeclarerLeads)
+                    .ThenByDescending(a => a.TotalCardsInSuit)
+                    .ToList();
+
+                if (controlledSafeSuits.Any())
+                {
+                    var bestSuit = controlledSafeSuits.First();
+                    return bestSuit.StrongestCard!;
+                }
+
+                // Among safe suits without control, prefer longest suit
+                var longestSafeSuit = safeSuits
+                    .OrderByDescending(a => a.CardsPerPlayer[declarerIndex])
+                    .ThenByDescending(a => a.DeclarerWinsIfDeclarerLeads)
+                    .First();
+
+                return GetHighestCardInSuit(longestSafeSuit.Suit, declarerIndex, false, state);
             }
 
-            // Priority 2: Lead strongest card from longest suit
-            var longestSuit = availableSuits
-                .OrderByDescending(a => a.CardsPerPlayer[declarerIndex])
-                .ThenByDescending(a => a.DeclarerWins)
+            // Priority 2: No safe suits - lead from suits where declarer benefits from leading first
+            var advantageousSuits = availableSuits
+                .Where(a => a.DeclarerWinsIfDeclarerLeads > a.DeclarerWinsIfDefenderLeads)
+                .OrderByDescending(a => a.DeclarerWinsIfDeclarerLeads - a.DeclarerWinsIfDefenderLeads) // Biggest advantage
+                .ThenByDescending(a => a.DeclarerWinsIfDeclarerLeads)
+                .ToList();
+
+            if (advantageousSuits.Any())
+            {
+                var bestSuit = advantageousSuits.First();
+                
+                // If declarer has strongest card, lead it
+                if (bestSuit.StrongestCardOwner == declarerIndex && bestSuit.StrongestCard != null)
+                {
+                    return bestSuit.StrongestCard;
+                }
+                
+                return GetHighestCardInSuit(bestSuit.Suit, declarerIndex, false, state);
+            }
+
+            // Priority 3: All suits are disadvantageous - minimize loss
+            var leastBadSuit = availableSuits
+                .OrderBy(a => a.DeclarerWinsIfDefenderLeads - a.DeclarerWinsIfDeclarerLeads) // Smallest disadvantage
+                .ThenByDescending(a => a.CardsPerPlayer[declarerIndex])
                 .First();
 
-            return GetHighestCardInSuit(longestSuit.Suit, declarerIndex, false);
+            return GetHighestCardInSuit(leastBadSuit.Suit, declarerIndex, false, state);
         }
 
-        private PerfectCardMove SelectDefenderLeadCard(int currentDefender, List<SuitAnalysis3Result> suitAnalyses)
+        private PerfectCardMove SelectDefenderLeadCard(int currentDefender, List<SuitAnalysis3Result> suitAnalyses, PerfPerfectGameState state)
         {
             int partnerDefender = _defenderIndices.First(d => d != currentDefender);
 
@@ -200,53 +593,108 @@ namespace GameOfCardsCsharp.Preferance.Trump
                 // there must be at least one suit where player has cards
 
                 // Fallback: play any available card
-                return _state.GetAvailableMovesForPlayer(currentDefender).First();
+                return state.GetAvailableMovesForPlayer(currentDefender).First();
             }
 
-            // Priority 1: Suits where defenders control (either defender has strongest)
-            var controlledSuits = availableSuits
-                .Where(a => _defenderIndices.Contains(a.StrongestCardOwner))
-                .OrderByDescending(a => a.DefenderWins)
-                .ThenByDescending(a => a.TotalCardsInSuit)
+            // Priority 1: Lead from suits where leading doesn't matter (same result either way)
+            // These are "safe" suits where defender doesn't lose first-mover advantage
+            var safeSuits = availableSuits
+                .Where(a => a.DefenderWinsIfDeclarerLeads == a.DefenderWinsIfDefenderLeads)
                 .ToList();
 
-            if (controlledSuits.Any())
+            if (safeSuits.Any())
             {
-                var bestSuit = controlledSuits.First();
+                // Among safe suits, prefer those where defenders control
+                var controlledSafeSuits = safeSuits
+                    .Where(a => _defenderIndices.Contains(a.StrongestCardOwner))
+                    .OrderByDescending(a => a.DefenderWinsIfDefenderLeads)
+                    .ThenByDescending(a => a.TotalCardsInSuit)
+                    .ToList();
 
-                // Case 1: Current defender has the strongest card
-                if (bestSuit.StrongestCardOwner == currentDefender && bestSuit.StrongestCard != null)
+                if (controlledSafeSuits.Any())
                 {
-                    // Lead with strongest card
-                    return bestSuit.StrongestCard;
-                }
-                
-                // Case 2: Partner has the strongest card
-                if (bestSuit.StrongestCardOwner == partnerDefender)
-                {
-                    // Signal to partner: Lead with SMALLEST card
-                    var smallestCard = GetSmallestCardInSuit(bestSuit.Suit, currentDefender);
-                    
-                    // Set signal for partner
-                    _lastLeadSignal = new PartnerSignal
+                    var bestSuit = controlledSafeSuits.First();
+
+                    // Case 1: Current defender has the strongest card
+                    if (bestSuit.StrongestCardOwner == currentDefender && bestSuit.StrongestCard != null)
                     {
-                        LeadSuit = bestSuit.Suit,
-                        LeaderIndex = currentDefender,
-                        IsSmallestCardSignal = true,
-                        PartnerHasControl = true
-                    };
+                        // Lead with strongest card
+                        return bestSuit.StrongestCard;
+                    }
                     
-                    return smallestCard;
+                    // Case 2: Partner has the strongest card
+                    if (bestSuit.StrongestCardOwner == partnerDefender)
+                    {
+                        // Signal to partner: Lead with SMALLEST card
+                        var smallestCard = GetSmallestCardInSuit(bestSuit.Suit, currentDefender, state);
+                        
+                        // Set signal for partner
+                        _lastLeadSignal = new PartnerSignal
+                        {
+                            LeadSuit = bestSuit.Suit,
+                            LeaderIndex = currentDefender,
+                            IsSmallestCardSignal = true,
+                            PartnerHasControl = true
+                        };
+                        
+                        return smallestCard;
+                    }
                 }
+
+                // Among safe suits without control, prefer longest suit
+                var longestSafeSuit = safeSuits
+                    .OrderByDescending(a => a.CardsPerPlayer[currentDefender])
+                    .ThenByDescending(a => a.DefenderWinsIfDefenderLeads)
+                    .First();
+
+                return GetHighestCardInSuit(longestSafeSuit.Suit, currentDefender, true, state);
             }
 
-            // Priority 2: No controlled suits - lead from longest suit
-            var longestSuit = availableSuits
-                .OrderByDescending(a => a.CardsPerPlayer[currentDefender])
-                .ThenByDescending(a => a.DefenderWins)
+            // Priority 2: No safe suits - lead from suits where defenders benefit from leading first
+            var advantageousSuits = availableSuits
+                .Where(a => a.DefenderWinsIfDefenderLeads > a.DefenderWinsIfDeclarerLeads)
+                .OrderByDescending(a => a.DefenderWinsIfDefenderLeads - a.DefenderWinsIfDeclarerLeads) // Biggest advantage
+                .ThenByDescending(a => a.DefenderWinsIfDefenderLeads)
+                .ToList();
+
+            if (advantageousSuits.Any())
+            {
+                var bestSuit = advantageousSuits.First();
+                
+                // If any defender has strongest card
+                if (_defenderIndices.Contains(bestSuit.StrongestCardOwner))
+                {
+                    if (bestSuit.StrongestCardOwner == currentDefender && bestSuit.StrongestCard != null)
+                    {
+                        return bestSuit.StrongestCard;
+                    }
+                    else if (bestSuit.StrongestCardOwner == partnerDefender)
+                    {
+                        // Signal to partner with smallest card
+                        var smallestCard = GetSmallestCardInSuit(bestSuit.Suit, currentDefender, state);
+                        
+                        _lastLeadSignal = new PartnerSignal
+                        {
+                            LeadSuit = bestSuit.Suit,
+                            LeaderIndex = currentDefender,
+                            IsSmallestCardSignal = true,
+                            PartnerHasControl = true
+                        };
+                        
+                        return smallestCard;
+                    }
+                }
+                
+                return GetHighestCardInSuit(bestSuit.Suit, currentDefender, true, state);
+            }
+
+            // Priority 3: All suits are disadvantageous - minimize loss
+            var leastBadSuit = availableSuits
+                .OrderBy(a => a.DefenderWinsIfDeclarerLeads - a.DefenderWinsIfDefenderLeads) // Smallest disadvantage
+                .ThenByDescending(a => a.CardsPerPlayer[currentDefender])
                 .First();
 
-            return GetHighestCardInSuit(longestSuit.Suit, currentDefender, true);
+            return GetHighestCardInSuit(leastBadSuit.Suit, currentDefender, true, state);
         }
 
         // ==================== FOLLOW SELECTION ====================
@@ -255,10 +703,11 @@ namespace GameOfCardsCsharp.Preferance.Trump
             PerfectCardMove leadMove, 
             int leadPlayer, 
             int currentPlayer, 
-            List<SuitAnalysis3Result> suitAnalyses)
+            List<SuitAnalysis3Result> suitAnalyses,
+            PerfPerfectGameState state)
         {
             var leadSuit = leadMove.Card.Suit;
-            var suitMoves = _state.Moves[(int)leadSuit];
+            var suitMoves = state.Moves[(int)leadSuit];
             
             bool currentIsDefender = (currentPlayer != _declarerIndex);
             bool leadIsDefender = (leadPlayer != _declarerIndex);
@@ -349,7 +798,7 @@ namespace GameOfCardsCsharp.Preferance.Trump
             }
             
             // Cannot follow suit → must play trump or discard
-            return SelectDiscardOrTrump(leadSuit, currentPlayer, suitAnalyses, isPartnerLead);
+            return SelectDiscardOrTrump(leadSuit, currentPlayer, suitAnalyses, isPartnerLead, state);
         }
 
         private PerfectCardMove SelectThirdPlayerFollow(
@@ -357,10 +806,11 @@ namespace GameOfCardsCsharp.Preferance.Trump
             PerfectCardMove firstFollowMove,
             int leadPlayer,
             int currentPlayer,
-            List<SuitAnalysis3Result> suitAnalyses)
+            List<SuitAnalysis3Result> suitAnalyses,
+            PerfPerfectGameState state)
         {
             var leadSuit = leadMove.Card.Suit;
-            var suitMoves = _state.Moves[(int)leadSuit];
+            var suitMoves = state.Moves[(int)leadSuit];
             
             bool currentIsDefender = (currentPlayer != _declarerIndex);
             int partnerIndex = currentIsDefender ? _defenderIndices.First(d => d != currentPlayer) : -1;
@@ -451,94 +901,164 @@ namespace GameOfCardsCsharp.Preferance.Trump
             bool partnerWinning = currentIsDefender && 
                 (DetermineWinnerBetweenTwo(leadMove, firstFollowMove) != _declarerIndex);
             
-            return SelectDiscardOrTrump(leadSuit, currentPlayer, suitAnalyses, partnerWinning);
+            return SelectDiscardOrTrump(leadSuit, currentPlayer, suitAnalyses, partnerWinning, state);
         }
 
         private PerfectCardMove SelectDiscardOrTrump(
             Suit leadSuit, 
             int currentPlayer, 
             List<SuitAnalysis3Result> suitAnalyses,
-            bool partnerWinning)
+            bool partnerWinning,
+            PerfPerfectGameState state)
         {
             bool isDefender = (currentPlayer != _declarerIndex);
             
-            // Check if we have trump cards
-            var trumpMoves = _state.Moves[(int)_trumpSuit]
+            // Check if we can follow suit first
+            var followSuitMoves = state.Moves[(int)leadSuit]
                 .Where(m => m.Available && m.PlayerIndex == currentPlayer)
                 .ToList();
             
-            if (trumpMoves.Any() && leadSuit != _trumpSuit)
+            if (followSuitMoves.Any())
             {
-                // Play smallest trump
-                return trumpMoves.Last();
+                // Should not reach here, but handle it
+                return followSuitMoves.Last();
             }
             
-            // No trump or lead suit is trump → discard from longest suit
-            var discardSuits = suitAnalyses
-                .Where(a => a.Suit != leadSuit && a.CardsPerPlayer[currentPlayer] > 0)
+            // Cannot follow suit
+            var trumpMoves = state.Moves[(int)_trumpSuit]
+                .Where(m => m.Available && m.PlayerIndex == currentPlayer)
+                .ToList();
+            
+            // CASE 1: Lead suit IS trump - we cannot follow with that specific trump
+            if (leadSuit == _trumpSuit)
+            {
+                // Must discard non-trump OR another trump we don't have
+                return SelectTrumpLeadDiscard(currentPlayer, suitAnalyses, isDefender, state);
+            }
+            
+            // CASE 2: Lead suit is NOT trump - MUST play trump if we have it
+            if (trumpMoves.Any())
+            {
+                // Determine our position in the trick
+                int leadPlayerIndex = state.LeaderPlayerIndex;
+                bool isSecondPlayer = (state.CurrentPlayerIndex == GetNextPlayerIndex(leadPlayerIndex));
+                
+                if (isDefender)
+                {
+                    return SelectDefenderTrump(trumpMoves, leadSuit, isSecondPlayer, currentPlayer, state);
+                }
+                else
+                {
+                    return SelectDeclarerTrump(trumpMoves, leadSuit, isSecondPlayer, currentPlayer, state);
+                }
+            }
+            
+            // CASE 3: No trump available - discard from another suit
+            var nonTrumpSuits = suitAnalyses
+                .Where(a => a.Suit != leadSuit && a.Suit != _trumpSuit && a.CardsPerPlayer[currentPlayer] > 0)
                 .ToList();
 
-            if (!discardSuits.Any())
+            if (nonTrumpSuits.Any())
             {
-                // Fallback: any available card
-                return _state.GetAvailableMovesForPlayer(currentPlayer).First();
+                var discardSuit = nonTrumpSuits
+                    .OrderByDescending(a => a.CardsPerPlayer[currentPlayer])
+                    .ThenBy(a => a.DefenderWinsIfDefenderLeads)
+                    .First();
+
+                var discardMoves = state.Moves[(int)discardSuit.Suit]
+                    .Where(m => m.Available && m.PlayerIndex == currentPlayer)
+                    .ToList();
+
+                if (discardMoves.Any())
+                {
+                    return discardMoves.Last(); // Smallest
+                }
+            }
+            
+            // Fallback
+            return state.GetAvailableMovesForPlayer(currentPlayer).First();
+        }
+
+        /// <summary>
+        /// Gets the index of the next player in rotation (wraps around at 3)
+        /// </summary>
+        private int GetNextPlayerIndex(int currentPlayerIndex)
+        {
+            return (currentPlayerIndex + 1) % 3;
+        }
+
+        /// <summary>
+        /// Selects a card to discard when lead suit is trump and we cannot follow
+        /// </summary>
+        private PerfectCardMove SelectTrumpLeadDiscard(
+            int currentPlayer, 
+            List<SuitAnalysis3Result> suitAnalyses,
+            bool isDefender,
+            PerfPerfectGameState state)
+        {
+            // Get all non-trump suits where current player has cards
+            var nonTrumpSuits = suitAnalyses
+                .Where(a => a.Suit != _trumpSuit && a.CardsPerPlayer[currentPlayer] > 0)
+                .ToList();
+
+            if (!nonTrumpSuits.Any())
+            {
+                // No non-trump cards - must discard smallest trump
+                var trumpMoves = state.Moves[(int)_trumpSuit]
+                    .Where(m => m.Available && m.PlayerIndex == currentPlayer)
+                    .ToList();
+                return trumpMoves.Last(); // Last = smallest
             }
 
-            // Discard from longest suit
-            var discardSuit = discardSuits
-                .OrderByDescending(a => a.CardsPerPlayer[currentPlayer])
-                .ThenBy(a => isDefender ? a.DefenderWins : a.DeclarerWins)
+            // Discard from the suit with worst prospects
+            var worstSuit = nonTrumpSuits
+                .OrderBy(a => isDefender ? a.DefenderWinsIfDefenderLeads : a.DeclarerWinsIfDeclarerLeads)
+                .ThenBy(a => a.CardsPerPlayer[currentPlayer])
                 .First();
-            
-            var discardMoves = _state.Moves[(int)discardSuit.Suit]
-                .Where(m => m.Available && m.PlayerIndex == currentPlayer)
+
+            // Return smallest card in that suit
+            return GetSmallestCardInSuit(worstSuit.Suit, currentPlayer, state);
+        }
+
+        /// <summary>
+        /// Gets the smallest card in a suit for the specified player
+        /// </summary>
+        private PerfectCardMove GetSmallestCardInSuit(Suit suit, int playerIndex, PerfPerfectGameState state)
+        {
+            var suitMoves = state.Moves[(int)suit]
+                .Where(m => m.Available && m.PlayerIndex == playerIndex)
                 .ToList();
             
-            if (discardMoves.Any())
-            {
-                return discardMoves.Last(); // Smallest card
-            }
-            
-            // Ultimate fallback
-            return _state.GetAvailableMovesForPlayer(currentPlayer).First();
+            return suitMoves.Last(); // Last element = smallest rank
         }
 
-        // ==================== HELPER METHODS ====================
-
-        private PerfectCardMove GetHighestCardInSuit(Suit suit, int playerIndex, bool isDefender)
+        /// <summary>
+        /// Gets the highest card in a suit for the specified player
+        /// </summary>
+        /// <param name="suit">The suit to search in</param>
+        /// <param name="playerIndex">The player index</param>
+        /// <param name="allowSignaling">Whether this is for a defender who might want to signal to partner</param>
+        /// <returns>The highest available card in the suit</returns>
+        private PerfectCardMove GetHighestCardInSuit(Suit suit, int playerIndex, bool allowSignaling, PerfPerfectGameState state)
         {
-            var suitMoves = _state.Moves[(int)suit];
-            
-            if (isDefender)
-            {
-                // For defenders, get highest card from either defender
-                return suitMoves
-                    .Where(m => m.Available && _defenderIndices.Contains(m.PlayerIndex))
-                    .FirstOrDefault();
-            }
-            else
-            {
-                // For declarer, get highest declarer card
-                return suitMoves
-                    .Where(m => m.Available && m.PlayerIndex == playerIndex)
-                    .FirstOrDefault();
-            }
-        }
-
-        private PerfectCardMove GetSmallestCardInSuit(Suit suit, int playerIndex)
-        {
-            var suitMoves = _state.Moves[(int)suit];
-            
-            return suitMoves
+            var suitMoves = state.Moves[(int)suit]
                 .Where(m => m.Available && m.PlayerIndex == playerIndex)
-                .LastOrDefault();
+                .ToList();
+
+            if (!suitMoves.Any())
+            {
+                throw new InvalidOperationException($"Player {playerIndex} has no cards in {suit}");
+            }
+
+            // Cards are sorted from highest to lowest, so first element is highest
+            return suitMoves.First();
         }
 
         private int DetermineWinnerBetweenTwo(PerfectCardMove leadMove, PerfectCardMove followMove)
         {
             bool leadIsTrump = leadMove.Card.Suit == _trumpSuit;
             bool followIsTrump = followMove.Card.Suit == _trumpSuit;
-            
+                
             // Both trump → highest wins
             if (leadIsTrump && followIsTrump)
             {
@@ -546,25 +1066,25 @@ namespace GameOfCardsCsharp.Preferance.Trump
                     ? leadMove.PlayerIndex 
                     : followMove.PlayerIndex;
             }
-            
+                
             // Follow is trump, lead is not
             if (followIsTrump && !leadIsTrump)
             {
                 return followMove.PlayerIndex;
             }
-            
+                
             // Lead is trump, follow is not
             if (leadIsTrump && !followIsTrump)
             {
                 return leadMove.PlayerIndex;
             }
-            
+                
             // Neither is trump → must follow suit
             if (followMove.Card.Suit != leadMove.Card.Suit)
             {
                 return leadMove.PlayerIndex;
             }
-            
+                
             // Same suit → highest rank wins
             return leadMove.Card.Rank > followMove.Card.Rank 
                 ? leadMove.PlayerIndex 
