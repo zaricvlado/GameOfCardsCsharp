@@ -267,6 +267,27 @@ namespace GameOfCardsCsharp.Preferance.Common
         /// </summary>
         public int LeaderPlayerIndex { get; set; }
 
+        private int _declarerIndex;
+
+        /// <summary>
+        /// Index of the player who is the declarer for this hand (0-based).
+        /// Mandatory; must always be a valid index into <see cref="Players"/>.
+        /// </summary>
+        public int DeclarerIndex
+        {
+            get => _declarerIndex;
+            set
+            {
+                if (value < 0 || value >= Players.Count)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(DeclarerIndex),
+                        $"Declarer index {value} is out of range (0-{Players.Count - 1}).");
+                }
+                _declarerIndex = value;
+            }
+        }
+
         /// <summary>
         /// All moves organized by suit. 
         /// Index 0 = Clubs, 1 = Diamonds, 2 = Hearts, 3 = Spades
@@ -274,13 +295,28 @@ namespace GameOfCardsCsharp.Preferance.Common
         /// </summary>
         public List<List<PerfectCardMove>> Moves { get; }
 
-        public PerfPerfectGameState(PreferanceGameMode gameMode, List<string> players, TrumpSuit trumpSuit = TrumpSuit.None, int currentPlayerIndex = 0, int leaderPlayerIndex = 0)
+        public PerfPerfectGameState(
+            PreferanceGameMode gameMode,
+            List<string> players,
+            int declarerIndex,
+            TrumpSuit trumpSuit = TrumpSuit.None,
+            int currentPlayerIndex = 0,
+            int leaderPlayerIndex = 0)
         {
             GameMode = gameMode;
             TrumpSuit = trumpSuit;
             Players = players ?? throw new ArgumentNullException(nameof(players));
             CurrentPlayerIndex = currentPlayerIndex;
             LeaderPlayerIndex = leaderPlayerIndex;
+
+            if (declarerIndex < 0 || declarerIndex >= Players.Count)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(declarerIndex),
+                    $"Declarer index {declarerIndex} is out of range (0-{Players.Count - 1}). " +
+                    "A declarer must be assigned for every PerfPerfectGameState.");
+            }
+            DeclarerIndex = declarerIndex;
 
             // Initialize 4 lists for each suit
             Moves = new List<List<PerfectCardMove>>
@@ -826,6 +862,16 @@ namespace GameOfCardsCsharp.Preferance.Common
         }
 
         /// <summary>
+        /// Analyzes a suit using the declarer stored on this game state.
+        /// </summary>
+        public SuitAnalysis3Result AnalyzeSuit(Suit suit) => AnalyzeSuit(suit, DeclarerIndex);
+
+        /// <summary>
+        /// Analyzes all suits using the declarer stored on this game state.
+        /// </summary>
+        public List<SuitAnalysis3Result> AnalyzeAllSuits() => AnalyzeAllSuits(DeclarerIndex);
+
+        /// <summary>
         /// Sets up the game state with specific hands for all players.
         /// Clears any existing cards before adding new ones.
         /// </summary>
@@ -1075,11 +1121,12 @@ namespace GameOfCardsCsharp.Preferance.Common
             
             // Create a new state with cloned data
             var clonedState = new PerfPerfectGameState(
-                GameMode,                          // 1st param: PreferanceGameMode
-                Players.ToList(),                  // 2nd param: List<string>
-                TrumpSuit,                         // 3rd param: TrumpSuit
-                CurrentPlayerIndex,                // 4th param: int currentPlayerIndex
-                LeaderPlayerIndex                  // 5th param: int leaderPlayerIndex
+                GameMode,                          // 1st: PreferanceGameMode
+                Players.ToList(),                  // 2nd: List<string>
+                DeclarerIndex,                     // 3rd: int declarerIndex (mandatory)
+                TrumpSuit,                         // 4th: TrumpSuit
+                CurrentPlayerIndex,                // 5th: int currentPlayerIndex
+                LeaderPlayerIndex                  // 6th: int leaderPlayerIndex
             );
             
             // Replace the empty Moves with our cloned moves
@@ -1087,6 +1134,259 @@ namespace GameOfCardsCsharp.Preferance.Common
             clonedState.Moves.AddRange(clonedMoves);
             
             return clonedState;
+        }
+
+        /// <summary>
+        /// Returns a short candidate list for the declarer — at most one card per suit.
+        /// Rules per suit (considering only available cards):
+        ///   - If the declarer owns the highest card in the suit, that card is the candidate.
+        ///   - Otherwise, the candidate is the declarer's second-highest card in the suit.
+        ///   - If the declarer has only one card in the suit (and it's not the suit's highest),
+        ///     that single card is returned as the candidate.
+        ///   - If the declarer has no cards in the suit, no candidate is emitted for that suit.
+        /// </summary>
+        /// <returns>
+        /// A list of up to 4 <see cref="PerfectCardMove"/> entries (one per suit where the
+        /// declarer holds at least one available card).
+        /// </returns>
+        public List<PerfectCardMove> GetDeclarerShortCandidateList()
+        {
+            var candidates = new List<PerfectCardMove>(4);
+
+            for (int suitIndex = 0; suitIndex < Moves.Count; suitIndex++)
+            {
+                var candidate = GetDeclarerShortCandidateInSuit(suitIndex);
+                if (candidate != null)
+                {
+                    candidates.Add(candidate);
+                }
+            }
+
+            return candidates;
+        }
+
+        /// <summary>
+        /// Returns the declarer's short-list candidate for a single suit, or
+        /// <c>null</c> if the declarer has no available cards in that suit.
+        /// See <see cref="GetDeclarerShortCandidateList"/> for the full rule set.
+        /// </summary>
+        public PerfectCardMove? GetDeclarerShortCandidateInSuit(Suit suit)
+            => GetDeclarerShortCandidateInSuit((int)suit);
+
+        private PerfectCardMove? GetDeclarerShortCandidateInSuit(int suitIndex)
+        {
+            var suitMoves = Moves[suitIndex];
+
+            // Find the highest available card in the suit and the declarer's
+            // top two available cards in a single pass.
+            // Moves are stored sorted by rank descending, so the first available hit
+            // is the highest, the next declarer hit is the second-highest, etc.
+            PerfectCardMove? suitHighest = null;
+            PerfectCardMove? declarerHighest = null;
+            PerfectCardMove? declarerSecondHighest = null;
+
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                var move = suitMoves[i];
+                if (!move.Available)
+                {
+                    continue;
+                }
+
+                suitHighest ??= move;
+
+                if (move.PlayerIndex == DeclarerIndex)
+                {
+                    if (declarerHighest == null)
+                    {
+                        declarerHighest = move;
+                    }
+                    else if (declarerSecondHighest == null)
+                    {
+                        declarerSecondHighest = move;
+                        // We have everything we could possibly need.
+                        break;
+                    }
+                }
+            }
+
+            // Declarer has no cards in this suit.
+            if (declarerHighest == null)
+            {
+                return null;
+            }
+
+            // Declarer owns the highest card in the suit -> use it.
+            if (suitHighest!.PlayerIndex == DeclarerIndex)
+            {
+                return declarerHighest;
+            }
+
+            // Declarer doesn't own the highest -> prefer second-highest declarer card,
+            // fall back to the only declarer card available.
+            return declarerSecondHighest ?? declarerHighest;
+        }
+
+        /// <summary>
+        /// Returns a short candidate list for a defender — at most one card per suit.
+        /// Rules per suit (considering only available cards):
+        ///   - If the player who plays after <paramref name="defenderIndex"/> is the declarer
+        ///     AND this defender does NOT own the suit's highest available card,
+        ///     the candidate is this defender's SMALLEST available card in the suit
+        ///     (duck through the declarer; either partner wins or we lose minimally).
+        ///   - Otherwise, the candidate is this defender's STRONGEST available card in the suit.
+        ///   - If this defender has no available cards in the suit, no candidate is emitted.
+        /// </summary>
+        /// <param name="defenderIndex">
+        /// The defender for whom to compute candidates. Must be a valid player index and
+        /// must not equal <see cref="DeclarerIndex"/>.
+        /// </param>
+        public List<PerfectCardMove> GetDefenderShortCandidateList(int defenderIndex)
+        {
+            if (defenderIndex < 0 || defenderIndex >= Players.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(defenderIndex),
+                    $"Defender index {defenderIndex} is out of range (0-{Players.Count - 1}).");
+            }
+            if (defenderIndex == DeclarerIndex)
+            {
+                throw new ArgumentException(
+                    "defenderIndex must not equal DeclarerIndex.", nameof(defenderIndex));
+            }
+
+            int nextPlayerIndex = (defenderIndex + 1) % Players.Count;
+            bool nextPlayerIsDeclarer = nextPlayerIndex == DeclarerIndex;
+
+            var candidates = new List<PerfectCardMove>(4);
+
+            for (int suitIndex = 0; suitIndex < Moves.Count; suitIndex++)
+            {
+                var candidate = GetDefenderShortCandidateInSuit(
+                    suitIndex, defenderIndex, nextPlayerIsDeclarer);
+                if (candidate != null)
+                {
+                    candidates.Add(candidate);
+                }
+            }
+
+            return candidates;
+        }
+
+        /// <summary>
+        /// Returns the defender's short-list candidate for a single suit, or
+        /// <c>null</c> if the defender has no available cards in that suit.
+        /// See <see cref="GetDefenderShortCandidateList(int)"/> for the full rule set.
+        /// </summary>
+        public PerfectCardMove? GetDefenderShortCandidateInSuit(Suit suit, int defenderIndex)
+        {
+            int nextPlayerIndex = (defenderIndex + 1) % Players.Count;
+            bool nextPlayerIsDeclarer = nextPlayerIndex == DeclarerIndex;
+            return GetDefenderShortCandidateInSuit((int)suit, defenderIndex, nextPlayerIsDeclarer);
+        }
+
+        private PerfectCardMove? GetDefenderShortCandidateInSuit(
+            int suitIndex, int defenderIndex, bool nextPlayerIsDeclarer)
+        {
+            var suitMoves = Moves[suitIndex];
+
+            // Moves are stored sorted by rank descending. We track:
+            //   - the suit's highest available card (first available hit),
+            //   - this defender's highest available card (first defender-owned available hit),
+            //   - this defender's lowest available card (last defender-owned available hit).
+            PerfectCardMove? suitHighest = null;
+            PerfectCardMove? defenderHighest = null;
+            PerfectCardMove? defenderLowest = null;
+
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                var move = suitMoves[i];
+                if (!move.Available)
+                {
+                    continue;
+                }
+
+                suitHighest ??= move;
+
+                if (move.PlayerIndex == defenderIndex)
+                {
+                    defenderHighest ??= move;
+                    defenderLowest = move; // last write wins -> lowest, since list is sorted desc
+                }
+            }
+
+            // Defender has no cards in this suit.
+            if (defenderHighest == null)
+            {
+                return null;
+            }
+
+            // If declarer plays right after us and we don't own the suit's highest,
+            // duck with our smallest in that suit.
+            bool defenderOwnsSuitHighest = suitHighest!.PlayerIndex == defenderIndex;
+            if (nextPlayerIsDeclarer && !defenderOwnsSuitHighest)
+            {
+                return defenderLowest;
+            }
+
+            // Otherwise, play the defender's strongest card in the suit.
+            return defenderHighest;
+        }
+
+        /// <summary>
+        /// Returns the player's highest-ranked available card in the given suit,
+        /// or <c>null</c> if the player has no available cards in that suit.
+        /// </summary>
+        /// <remarks>
+        /// Moves are stored sorted by rank descending, so the first available hit
+        /// for the player is their highest card.
+        /// </remarks>
+        public PerfectCardMove? GetHighestAvailableMoveInSuit(int playerIndex, Suit suit)
+        {
+            ValidatePlayerIndex(playerIndex);
+
+            var suitMoves = Moves[(int)suit];
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                var move = suitMoves[i];
+                if (move.Available && move.PlayerIndex == playerIndex)
+                {
+                    return move;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Returns all available moves the player holds in the given suit, sorted by
+        /// rank descending (highest first). Returns an empty list when the player
+        /// has no available cards in that suit.
+        /// </summary>
+        public IReadOnlyList<PerfectCardMove> GetAvailableMovesInSuit(int playerIndex, Suit suit)
+        {
+            ValidatePlayerIndex(playerIndex);
+
+            var suitMoves = Moves[(int)suit];
+            var result = new List<PerfectCardMove>();
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                var move = suitMoves[i];
+                if (move.Available && move.PlayerIndex == playerIndex)
+                {
+                    result.Add(move);
+                }
+            }
+
+            return result;
+        }
+
+        private void ValidatePlayerIndex(int playerIndex)
+        {
+            if (playerIndex < 0 || playerIndex >= Players.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(playerIndex),
+                    $"Player index {playerIndex} is out of range (0-{Players.Count - 1}).");
+            }
         }
     }
 }

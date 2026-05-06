@@ -34,7 +34,6 @@ namespace GameOfCardsCsharp.PreferanceBots
 
         // ==================== CAPTURED STATE FOR PERFECT PLAY ====================
         private PerfPerfectGameState? _currentTrickGameState;
-        private int _currentTrickDeclarerIndex;
 
         // ==================== UI COLLECTIONS ====================
         private ObservableCollection<PreferanceCardViewModel> bottomHandDisplay = new();
@@ -314,7 +313,6 @@ namespace GameOfCardsCsharp.PreferanceBots
             
             // Clear captured state
             _currentTrickGameState = null;
-            _currentTrickDeclarerIndex = 0;
         }
 
         private void DealCards()
@@ -384,7 +382,6 @@ namespace GameOfCardsCsharp.PreferanceBots
         {
             // Capture game state BEFORE any cards are played in this trick
             _currentTrickGameState = CaptureCurrentGameState();
-            _currentTrickDeclarerIndex = GetDeclarerMappedIndex();
             
             ClearPlayedCards();
             
@@ -467,6 +464,78 @@ namespace GameOfCardsCsharp.PreferanceBots
         private void OnGamePlayError(object? sender, GamePlayErrorEventArgs e)
         {
             LogMessage($"❌ Error: {e.ErrorMessage}");
+        }
+
+        // ==================== ANALYZE MODE ====================
+
+        private void OnAnalyzeClicked(object sender, EventArgs e)
+        {
+            AnalysisResultsPanel.IsVisible = true;
+            AnalysisRecommendedCardLabel.IsVisible = false;
+            AnalysisExpectedTricksLabel.IsVisible = false;
+            AnalysisPerformanceLabel.IsVisible = false;
+
+            if (_gamePlayEngine == null || !_gamePlayEngine.IsGameInProgress())
+            {
+                AnalysisStatusLabel.Text = "⚠️ Game not started. Please start a game first.";
+                return;
+            }
+
+            if (!CanUsePerfectPlay())
+            {
+                var contractType = GetContractType();
+                var activePlayers = GetActivePlayerIds();
+
+                if (contractType != ContractType.Sans && contractType != ContractType.Trump)
+                {
+                    AnalysisStatusLabel.Text = $"⚠️ Analysis is currently only supported for Sans and Trump games.";
+                }
+                else
+                {
+                    AnalysisStatusLabel.Text = $"⚠️ Perfect play supports:\n- 2-player Sans/Trump\n- 3-player Sans/Trump\n\nCurrent: {activePlayers.Count}-player {contractType}";
+                }
+                return;
+            }
+
+            try
+            {
+                var contractType = GetContractType();
+                var activePlayers = GetActivePlayerIds();
+                AnalysisResult analysisResult;
+
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                if (contractType == ContractType.Sans && activePlayers.Count == 2)
+                {
+                    analysisResult = PerformSans2Analysis();
+                }
+                else if (contractType == ContractType.Sans && activePlayers.Count == 3)
+                {
+                    analysisResult = PerformSans3Analysis();
+                }
+                else if (contractType == ContractType.Trump && activePlayers.Count == 2)
+                {
+                    analysisResult = PerformTrump2Analysis();
+                }
+                else if (contractType == ContractType.Trump && activePlayers.Count == 3)
+                {
+                    analysisResult = PerformTrump3Analysis();
+                }
+                else
+                {
+                    AnalysisStatusLabel.Text = $"⚠️ Unsupported configuration: {contractType} with {activePlayers.Count} players";
+                    return;
+                }
+
+                stopwatch.Stop();
+                analysisResult.ElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+
+                DisplayAnalysisResult(analysisResult);
+            }
+            catch (Exception ex)
+            {
+                AnalysisStatusLabel.Text = $"❌ Error during analysis:\n{ex.Message}";
+            }
         }
 
         // ==================== UI UPDATES ====================
@@ -829,7 +898,7 @@ namespace GameOfCardsCsharp.PreferanceBots
         // ==================== PERFECT PLAY HELPERS ====================
 
         /// <summary>
-        /// Checks if perfect play can be used (2-player Sans/Trump or 3-player Trump game)
+        /// Checks if perfect play can be used (2-player Sans/Trump, 3-player Sans, or 3-player Trump game)
         /// </summary>
         private bool CanUsePerfectPlay()
         {
@@ -843,15 +912,15 @@ namespace GameOfCardsCsharp.PreferanceBots
             if (activePlayers.Count == 2 && (contractType == ContractType.Sans || contractType == ContractType.Trump))
                 return true;
 
-            // 3-player Trump
-            if (activePlayers.Count == 3 && contractType == ContractType.Trump)
+            // 3-player Sans or Trump
+            if (activePlayers.Count == 3 && (contractType == ContractType.Sans || contractType == ContractType.Trump))
                 return true;
 
             return false;
         }
 
         /// <summary>
-        /// Gets the optimal card using Sans2PerfectGame, Trump2PerfectGame, or Trump3PerfectGame
+        /// Gets the optimal card using Sans2PerfectGame, SansPerfectGame, Trump2PerfectGame, or Trump3PerfectGame
         /// </summary>
         private Card GetPerfectPlayCard(int playerId)
         {
@@ -865,6 +934,10 @@ namespace GameOfCardsCsharp.PreferanceBots
             if (contractType == ContractType.Sans && activePlayers.Count == 2)
             {
                 return GetSansPerfectPlayCard(playerId);
+            }
+            else if (contractType == ContractType.Sans && activePlayers.Count == 3)
+            {
+                return GetSans3PerfectPlayCard(playerId);
             }
             else if (contractType == ContractType.Trump && activePlayers.Count == 2)
             {
@@ -928,6 +1001,61 @@ namespace GameOfCardsCsharp.PreferanceBots
         }
 
         /// <summary>
+        /// Gets the optimal card for 3-player Sans games using SansPerfectGame
+        /// </summary>
+        private Card GetSans3PerfectPlayCard(int playerId)
+        {
+            if (_gamePlayEngine == null)
+                throw new InvalidOperationException("Game engine not initialized");
+
+            if (_currentTrickGameState == null)
+                throw new InvalidOperationException("Game state not available. Cannot use perfect play.");
+
+            var activePlayers = GetActivePlayerIds();
+            var tableCards = _gamePlayEngine.GetTableCards();
+
+            if (activePlayers.Count != 3)
+                throw new InvalidOperationException($"SansPerfectGame requires 3 active players, but found {activePlayers.Count}");
+
+            var playerIdMap = new Dictionary<int, int>();
+            for (int i = 0; i < activePlayers.Count; i++)
+            {
+                playerIdMap[activePlayers[i]] = i;
+            }
+
+            // Clone captured state
+            var gameState = CloneGameState(_currentTrickGameState);
+            gameState.CurrentPlayerIndex = playerIdMap[playerId];
+            
+            // Mark table cards as played
+            foreach (var tableCard in tableCards)
+            {
+                MarkCardAsPlayed(gameState, tableCard);
+            }
+
+            var sansGame = new SansPerfectGame(gameState);
+
+            PerfectCardMove bestMove;
+            if (tableCards.Count == 0)
+            {
+                bestMove = sansGame.BestLeadCards()[0];
+            }
+            else if (tableCards.Count == 1)
+            {
+                var leadMove = FindCardInGameState(gameState, tableCards[0]);
+                bestMove = sansGame.BestFollowCards(leadMove, null)[0];
+            }
+            else
+            {
+                var leadMove = FindCardInGameState(gameState, tableCards[0]);
+                var firstFollowMove = FindCardInGameState(gameState, tableCards[1]);
+                bestMove = sansGame.BestFollowCards(leadMove, firstFollowMove)[0];
+            }
+
+            return bestMove.Card;
+        }
+
+        /// <summary>
         /// Gets the optimal card for 2-player Trump games using Trump2PerfectGame
         /// </summary>
         private Card GetTrumpPerfectPlayCard(int playerId)
@@ -979,13 +1107,13 @@ namespace GameOfCardsCsharp.PreferanceBots
         }
 
         /// <summary>
-        /// Gets the optimal card for 3-player Trump games using Trump3PerfectGame
+        /// Gets the optimal card for 3-player Trump games using TrumpPerfectGame
         /// </summary>
         private Card GetTrump3PerfectPlayCard(int playerId)
         {
             if (_gamePlayEngine == null)
                 throw new InvalidOperationException("Game engine not initialized");
-            
+
             if (_currentTrickGameState == null)
                 throw new InvalidOperationException("Game state not available. Cannot use perfect play.");
 
@@ -995,9 +1123,9 @@ namespace GameOfCardsCsharp.PreferanceBots
 
             var activePlayers = GetActivePlayerIds();
             var tableCards = _gamePlayEngine.GetTableCards();
-            
+
             if (activePlayers.Count != 3)
-                throw new InvalidOperationException($"Trump3PerfectGame requires 3 active players, but found {activePlayers.Count}");
+                throw new InvalidOperationException($"TrumpPerfectGame requires 3 active players, but found {activePlayers.Count}");
 
             var playerIdMap = new Dictionary<int, int>();
             for (int i = 0; i < activePlayers.Count; i++)
@@ -1008,266 +1136,40 @@ namespace GameOfCardsCsharp.PreferanceBots
             // Clone captured state
             var gameState = CloneGameState(_currentTrickGameState);
             gameState.CurrentPlayerIndex = playerIdMap[playerId];
-            
+
             // Mark table cards as played
             foreach (var tableCard in tableCards)
             {
                 MarkCardAsPlayed(gameState, tableCard);
             }
 
-            var trumpGame = new Trump3PerfectGame(gameState, _currentTrickDeclarerIndex);
-            
+            var trumpGame = new TrumpPerfectGame(gameState);
+
             PerfectCardMove bestMove;
             if (tableCards.Count == 0)
             {
-                var bestMoves = trumpGame.BestLeadCard();
-                bestMove = bestMoves[0];
+                bestMove = trumpGame.BestLeadCards()[0];
             }
             else if (tableCards.Count == 1)
             {
                 var leadMove = FindCardInGameState(gameState, tableCards[0]);
-                bestMove = trumpGame.BestFollowCard(leadMove, null);
+                bestMove = trumpGame.BestFollowCards(leadMove, null)[0];
             }
             else
             {
                 var leadMove = FindCardInGameState(gameState, tableCards[0]);
                 var firstFollowMove = FindCardInGameState(gameState, tableCards[1]);
-                bestMove = trumpGame.BestFollowCard(leadMove, firstFollowMove);
+                bestMove = trumpGame.BestFollowCards(leadMove, firstFollowMove)[0];
             }
 
             return bestMove.Card;
-        }
-
-        /// <summary>
-        /// Captures the current game state at the start of a trick (before any cards played)
-        /// </summary>
-        private PerfPerfectGameState CaptureCurrentGameState()
-        {
-            var contractType = GetContractType();
-            var trumpSuit = GetTrumpSuitEnum() ?? TrumpSuit.None;
-            var activePlayers = GetActivePlayerIds();
-            
-            var gameMode = contractType switch
-            {
-                ContractType.Sans => PreferanceGameMode.Sans,
-                ContractType.Trump => PreferanceGameMode.Trump,
-                ContractType.Betl => PreferanceGameMode.Betl,
-                _ => PreferanceGameMode.Sans
-            };
-
-            var playerNames = activePlayers.Count == 2 
-                ? new List<string> { "Player0", "Player1" }
-                : new List<string> { "Player0", "Player1", "Player2" };
-            
-            var gameState = new PerfPerfectGameState(
-                gameMode,
-                playerNames,
-                trumpSuit,
-                0,
-                0
-            );
-
-            // Capture all players' hands as they are RIGHT NOW (at trick start)
-            var playerHands = new Dictionary<int, List<Card>>();
-            for (int i = 0; i < activePlayers.Count; i++)
-            {
-                var playerId = activePlayers[i];
-                var hand = _players[playerId].GetHand().GetCards().ToList();
-                playerHands[i] = hand;
-            }
-            
-            gameState.SetupPlayerHands(playerHands);
-            
-            return gameState;
-        }
-
-        /// <summary>
-        /// Gets the declarer's mapped index (0-2) in the active players list
-        /// </summary>
-        private int GetDeclarerMappedIndex()
-        {
-            var activePlayers = GetActivePlayerIds();
-            var declarerPlayerId = GetDeclarerPlayerId();
-            
-            for (int i = 0; i < activePlayers.Count; i++)
-            {
-                if (activePlayers[i] == declarerPlayerId)
-                    return i;
-            }
-            
-            return 0;
-        }
-
-        /// <summary>
-        /// Clones a game state for analysis without mutating the original
-        /// </summary>
-        private PerfPerfectGameState CloneGameState(PerfPerfectGameState original)
-        {
-            var clone = new PerfPerfectGameState(
-                original.GameMode,
-                new List<string>(original.Players),
-                original.TrumpSuit,
-                original.CurrentPlayerIndex,
-                original.LeaderPlayerIndex
-            );
-
-            // Rebuild hands from available moves
-            var playerHands = new Dictionary<int, List<Card>>();
-            
-            for (int playerIdx = 0; playerIdx < original.Players.Count; playerIdx++)
-            {
-                playerHands[playerIdx] = new List<Card>();
-            }
-            
-            // Collect all available cards
-            for (int suitIdx = 0; suitIdx < 4; suitIdx++)
-            {
-                foreach (var move in original.Moves[suitIdx])
-                {
-                    if (move.Available)
-                    {
-                        playerHands[move.PlayerIndex].Add(move.Card);
-                    }
-                }
-            }
-
-            clone.SetupPlayerHands(playerHands);
-            
-            return clone;
-        }
-
-        /// <summary>
-        /// Marks a card as played (unavailable) in the game state
-        /// </summary>
-        private void MarkCardAsPlayed(PerfPerfectGameState gameState, Card card)
-        {
-            var suitMoves = gameState.Moves[(int)card.Suit];
-            for (int i = 0; i < suitMoves.Count; i++)
-            {
-                if (suitMoves[i].Card.Suit == card.Suit && suitMoves[i].Card.Rank == card.Rank && suitMoves[i].Available)
-                {
-                    gameState.Moves[(int)card.Suit][i].Available = false;
-                    return;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Finds a card in the game state
-        /// </summary>
-        private PerfectCardMove FindCardInGameState(PerfPerfectGameState gameState, Card card)
-        {
-            var suitMoves = gameState.Moves[(int)card.Suit];
-            var move = suitMoves.FirstOrDefault(m => 
-                m.Card.Suit == card.Suit && 
-                m.Card.Rank == card.Rank);
-
-            if (move.Card == null)
-                throw new InvalidOperationException($"Could not find card {GetCardText(card)} in game state");
-
-            return move;
-        }
-
-        /// <summary>
-        /// Selects a random card from legal moves
-        /// </summary>
-        private Card GetRandomCard(List<Card> legalMoves)
-        {
-            var random = new Random();
-            return legalMoves[random.Next(legalMoves.Count)];
-        }
-
-        private List<int> GetActivePlayerIds()
-        {
-            var activeIds = new List<int>();
-
-            for (int i = 0; i < 3; i++)
-            {
-                var role = GetRoleForPlayer(i);
-                if (role != PlayerRole.Spectator)
-                {
-                    activeIds.Add(i);
-                }
-            }
-
-            return activeIds;
-        }
-
-        // ==================== ANALYZE MODE ====================
-
-        private void OnAnalyzeClicked(object sender, EventArgs e)
-        {
-            AnalysisResultsPanel.IsVisible = true;
-            AnalysisRecommendedCardLabel.IsVisible = false;
-            AnalysisExpectedTricksLabel.IsVisible = false;
-            AnalysisPerformanceLabel.IsVisible = false;
-
-            if (_gamePlayEngine == null || !_gamePlayEngine.IsGameInProgress())
-            {
-                AnalysisStatusLabel.Text = "⚠️ Game not started. Please start a game first.";
-                return;
-            }
-
-            if (!CanUsePerfectPlay())
-            {
-                var contractType = GetContractType();
-                var activePlayers = GetActivePlayerIds();
-
-                if (contractType != ContractType.Sans && contractType != ContractType.Trump)
-                {
-                    AnalysisStatusLabel.Text = $"⚠️ Analysis is currently only supported for Sans and Trump games.";
-                }
-                else
-                {
-                    AnalysisStatusLabel.Text = $"⚠️ Perfect play supports:\n- 2-player Sans/Trump\n- 3-player Trump\n\nCurrent: {activePlayers.Count}-player {contractType}";
-                }
-                return;
-            }
-
-            try
-            {
-                var contractType = GetContractType();
-                var activePlayers = GetActivePlayerIds();
-                AnalysisResult analysisResult;
-
-                // Start timing
-                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-
-                if (contractType == ContractType.Sans && activePlayers.Count == 2)
-                {
-                    analysisResult = PerformSans2Analysis();
-                }
-                else if (contractType == ContractType.Trump && activePlayers.Count == 2)
-                {
-                    analysisResult = PerformTrump2Analysis();
-                }
-                else if (contractType == ContractType.Trump && activePlayers.Count == 3)
-                {
-                    analysisResult = PerformTrump3Analysis();
-                }
-                else
-                {
-                    AnalysisStatusLabel.Text = $"⚠️ Unsupported configuration: {contractType} with {activePlayers.Count} players";
-                    return;
-                }
-
-                // Stop timing
-                stopwatch.Stop();
-                analysisResult.ElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
-
-                DisplayAnalysisResult(analysisResult);
-            }
-            catch (Exception ex)
-            {
-                AnalysisStatusLabel.Text = $"❌ Error during analysis:\n{ex.Message}";
-            }
         }
 
         private AnalysisResult PerformSans2Analysis()
         {
             if (_gamePlayEngine == null)
                 throw new InvalidOperationException("Game engine not initialized");
-            
+
             if (_currentTrickGameState == null)
                 throw new InvalidOperationException("Game state not captured. Analysis only works during active tricks.");
 
@@ -1281,18 +1183,16 @@ namespace GameOfCardsCsharp.PreferanceBots
                 playerIdMap[activePlayers[i]] = i;
             }
 
-            // Clone the captured state
             var gameState = CloneGameState(_currentTrickGameState);
             gameState.CurrentPlayerIndex = playerIdMap[currentPlayerId];
-            
-            // Mark table cards as played
+
             foreach (var tableCard in tableCards)
             {
                 MarkCardAsPlayed(gameState, tableCard);
             }
 
             var sansGame = new Sans2PerfectGame(gameState);
-            
+
             List<PerfectCardMove> bestMoves;
             if (tableCards.Count == 0)
             {
@@ -1315,9 +1215,72 @@ namespace GameOfCardsCsharp.PreferanceBots
                 BestMoves = bestMoves,
                 IsLeader = (tableCards.Count == 0),
                 CurrentPlayerId = currentPlayerId,
-                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks![currentPlayerMappedIndex],
+                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks?[currentPlayerMappedIndex] ?? 0,
                 OpponentId = opponentId,
-                OpponentExpectedTricks = firstMove.ExpectedTricks![opponentMappedIndex]
+                OpponentExpectedTricks = firstMove.ExpectedTricks?[opponentMappedIndex] ?? 0
+            };
+        }
+
+        private AnalysisResult PerformSans3Analysis()
+        {
+            if (_gamePlayEngine == null)
+                throw new InvalidOperationException("Game engine not initialized");
+
+            if (_currentTrickGameState == null)
+                throw new InvalidOperationException("Game state not captured. Analysis only works during active tricks.");
+
+            var activePlayers = GetActivePlayerIds();
+            var currentPlayerId = _gamePlayEngine.GetCurrentPlayerTurn();
+            var tableCards = _gamePlayEngine.GetTableCards();
+
+            var playerIdMap = new Dictionary<int, int>();
+            for (int i = 0; i < activePlayers.Count; i++)
+            {
+                playerIdMap[activePlayers[i]] = i;
+            }
+
+            var gameState = CloneGameState(_currentTrickGameState);
+            gameState.CurrentPlayerIndex = playerIdMap[currentPlayerId];
+
+            foreach (var tableCard in tableCards)
+            {
+                MarkCardAsPlayed(gameState, tableCard);
+            }
+
+            var sansGame = new SansPerfectGame(gameState);
+
+            List<PerfectCardMove> bestMoves;
+            if (tableCards.Count == 0)
+            {
+                bestMoves = sansGame.BestLeadCards();
+            }
+            else if (tableCards.Count == 1)
+            {
+                var leadMove = FindCardInGameState(gameState, tableCards[0]);
+                bestMoves = sansGame.BestFollowCards(leadMove, null);
+            }
+            else
+            {
+                var leadMove = FindCardInGameState(gameState, tableCards[0]);
+                var firstFollowMove = FindCardInGameState(gameState, tableCards[1]);
+                bestMoves = sansGame.BestFollowCards(leadMove, firstFollowMove);
+            }
+
+            var firstMove = bestMoves[0];
+            var currentPlayerMappedIndex = playerIdMap[currentPlayerId];
+            int declarerPlayerId = GetDeclarerPlayerId();
+            int declarerMappedIndex = playerIdMap[declarerPlayerId];
+
+            return new AnalysisResult
+            {
+                BestMoves = bestMoves,
+                IsLeader = (tableCards.Count == 0),
+                CurrentPlayerId = currentPlayerId,
+                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks?[currentPlayerMappedIndex] ?? 0,
+                OpponentId = declarerPlayerId,
+                OpponentExpectedTricks = firstMove.ExpectedTricks?[declarerMappedIndex] ?? 0,
+                IsThreePlayer = true,
+                AllPlayerTricks = firstMove.ExpectedTricks
             };
         }
 
@@ -1325,7 +1288,7 @@ namespace GameOfCardsCsharp.PreferanceBots
         {
             if (_gamePlayEngine == null)
                 throw new InvalidOperationException("Game engine not initialized");
-            
+
             if (_currentTrickGameState == null)
                 throw new InvalidOperationException("Game state not captured. Analysis only works during active tricks.");
 
@@ -1343,11 +1306,9 @@ namespace GameOfCardsCsharp.PreferanceBots
                 playerIdMap[activePlayers[i]] = i;
             }
 
-            // Clone the captured state
             var gameState = CloneGameState(_currentTrickGameState);
             gameState.CurrentPlayerIndex = playerIdMap[currentPlayerId];
-            
-            // Mark table cards as played
+
             foreach (var tableCard in tableCards)
             {
                 MarkCardAsPlayed(gameState, tableCard);
@@ -1377,9 +1338,9 @@ namespace GameOfCardsCsharp.PreferanceBots
                 BestMoves = bestMoves,
                 IsLeader = (tableCards.Count == 0),
                 CurrentPlayerId = currentPlayerId,
-                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks![currentPlayerMappedIndex],
+                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks?[currentPlayerMappedIndex] ?? 0,
                 OpponentId = opponentId,
-                OpponentExpectedTricks = firstMove.ExpectedTricks![opponentMappedIndex]
+                OpponentExpectedTricks = firstMove.ExpectedTricks?[opponentMappedIndex] ?? 0
             };
         }
 
@@ -1387,7 +1348,7 @@ namespace GameOfCardsCsharp.PreferanceBots
         {
             if (_gamePlayEngine == null)
                 throw new InvalidOperationException("Game engine not initialized");
-            
+
             if (_currentTrickGameState == null)
                 throw new InvalidOperationException("Game state not captured. Analysis only works during active tricks.");
 
@@ -1408,32 +1369,30 @@ namespace GameOfCardsCsharp.PreferanceBots
             // Clone the captured state
             var gameState = CloneGameState(_currentTrickGameState);
             gameState.CurrentPlayerIndex = playerIdMap[currentPlayerId];
-            
+
             // Mark table cards as played
             foreach (var tableCard in tableCards)
             {
                 MarkCardAsPlayed(gameState, tableCard);
             }
 
-            var trumpGame = new Trump3PerfectGame(gameState, _currentTrickDeclarerIndex);
-            
+            var trumpGame = new TrumpPerfectGame(gameState);
+
             List<PerfectCardMove> bestMoves;
             if (tableCards.Count == 0)
             {
-                bestMoves = trumpGame.BestLeadCard();
+                bestMoves = trumpGame.BestLeadCards();
             }
             else if (tableCards.Count == 1)
             {
                 var leadMove = FindCardInGameState(gameState, tableCards[0]);
-                var bestMove = trumpGame.BestFollowCard(leadMove, null);
-                bestMoves = new List<PerfectCardMove> { bestMove };
+                bestMoves = trumpGame.BestFollowCards(leadMove, null);
             }
             else
             {
                 var leadMove = FindCardInGameState(gameState, tableCards[0]);
                 var firstFollowMove = FindCardInGameState(gameState, tableCards[1]);
-                var bestMove = trumpGame.BestFollowCard(leadMove, firstFollowMove);
-                bestMoves = new List<PerfectCardMove> { bestMove };
+                bestMoves = trumpGame.BestFollowCards(leadMove, firstFollowMove);
             }
 
             var firstMove = bestMoves[0];
@@ -1446,9 +1405,9 @@ namespace GameOfCardsCsharp.PreferanceBots
                 BestMoves = bestMoves,
                 IsLeader = (tableCards.Count == 0),
                 CurrentPlayerId = currentPlayerId,
-                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks![currentPlayerMappedIndex],
+                CurrentPlayerExpectedTricks = firstMove.ExpectedTricks?[currentPlayerMappedIndex] ?? 0,
                 OpponentId = declarerPlayerId,
-                OpponentExpectedTricks = firstMove.ExpectedTricks![declarerMappedIndex],
+                OpponentExpectedTricks = firstMove.ExpectedTricks?[declarerMappedIndex] ?? 0,
                 IsThreePlayer = true,
                 AllPlayerTricks = firstMove.ExpectedTricks
             };
@@ -1498,6 +1457,166 @@ namespace GameOfCardsCsharp.PreferanceBots
             // Display performance metrics
             AnalysisPerformanceLabel.IsVisible = true;
             AnalysisPerformanceLabel.Text = $"⏱️ Time: {result.ElapsedMilliseconds:F2} ms";
+        }
+
+        /// <summary>
+        /// Captures the current game state at the start of a trick (before any cards played)
+        /// </summary>
+        private PerfPerfectGameState CaptureCurrentGameState()
+        {
+            var contractType = GetContractType();
+            var trumpSuit = GetTrumpSuitEnum() ?? TrumpSuit.None;
+            var activePlayers = GetActivePlayerIds();
+
+            var gameMode = contractType switch
+            {
+                ContractType.Sans => PreferanceGameMode.Sans,
+                ContractType.Trump => PreferanceGameMode.Trump,
+                ContractType.Betl => PreferanceGameMode.Betl,
+                _ => PreferanceGameMode.Sans
+            };
+
+            var playerNames = activePlayers.Count == 2
+                ? new List<string> { "Player0", "Player1" }
+                : new List<string> { "Player0", "Player1", "Player2" };
+
+            var declarerIndex = GetDeclarerMappedIndex();
+
+            var gameState = new PerfPerfectGameState(
+                gameMode,
+                playerNames,
+                declarerIndex,
+                trumpSuit,
+                currentPlayerIndex: 0,
+                leaderPlayerIndex: 0
+            );
+
+            var playerHands = new Dictionary<int, List<Card>>();
+            for (int i = 0; i < activePlayers.Count; i++)
+            {
+                var playerId = activePlayers[i];
+                var hand = _players[playerId].GetHand().GetCards().ToList();
+                playerHands[i] = hand;
+            }
+
+            gameState.SetupPlayerHands(playerHands);
+
+            return gameState;
+        }
+
+        /// <summary>
+        /// Clones a game state for analysis without mutating the original
+        /// </summary>
+        private PerfPerfectGameState CloneGameState(PerfPerfectGameState original)
+        {
+            var clone = new PerfPerfectGameState(
+                original.GameMode,
+                new List<string>(original.Players),
+                original.DeclarerIndex,
+                original.TrumpSuit,
+                original.CurrentPlayerIndex,
+                original.LeaderPlayerIndex
+            );
+
+            var playerHands = new Dictionary<int, List<Card>>();
+            for (int playerIdx = 0; playerIdx < original.Players.Count; playerIdx++)
+            {
+                playerHands[playerIdx] = new List<Card>();
+            }
+
+            for (int suitIdx = 0; suitIdx < 4; suitIdx++)
+            {
+                foreach (var move in original.Moves[suitIdx])
+                {
+                    if (move.Available)
+                    {
+                        playerHands[move.PlayerIndex].Add(move.Card);
+                    }
+                }
+            }
+
+            clone.SetupPlayerHands(playerHands);
+
+            return clone;
+        }
+
+        /// <summary>
+        /// Marks a card as played (unavailable) in the game state
+        /// </summary>
+        private void MarkCardAsPlayed(PerfPerfectGameState gameState, Card card)
+        {
+            var suitMoves = gameState.Moves[(int)card.Suit];
+            for (int i = 0; i < suitMoves.Count; i++)
+            {
+                if (suitMoves[i].Card.Suit == card.Suit
+                    && suitMoves[i].Card.Rank == card.Rank
+                    && suitMoves[i].Available)
+                {
+                    gameState.Moves[(int)card.Suit][i].Available = false;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Finds a card in the game state
+        /// </summary>
+        private PerfectCardMove FindCardInGameState(PerfPerfectGameState gameState, Card card)
+        {
+            var suitMoves = gameState.Moves[(int)card.Suit];
+            var move = suitMoves.FirstOrDefault(m =>
+                m.Card.Suit == card.Suit &&
+                m.Card.Rank == card.Rank);
+
+            if (move == null)
+                throw new InvalidOperationException($"Could not find card {GetCardText(card)} in game state");
+
+            return move;
+        }
+
+        /// <summary>
+        /// Selects a random card from legal moves
+        /// </summary>
+        private Card GetRandomCard(List<Card> legalMoves)
+        {
+            var random = new Random();
+            return legalMoves[random.Next(legalMoves.Count)];
+        }
+
+        /// <summary>
+        /// Returns the player IDs that are currently active (non-spectators)
+        /// </summary>
+        private List<int> GetActivePlayerIds()
+        {
+            var activeIds = new List<int>();
+
+            for (int i = 0; i < 3; i++)
+            {
+                var role = GetRoleForPlayer(i);
+                if (role != PlayerRole.Spectator)
+                {
+                    activeIds.Add(i);
+                }
+            }
+
+            return activeIds;
+        }
+
+        /// <summary>
+        /// Gets the declarer's mapped index (0-2) in the active players list
+        /// </summary>
+        private int GetDeclarerMappedIndex()
+        {
+            var activePlayers = GetActivePlayerIds();
+            var declarerPlayerId = GetDeclarerPlayerId();
+
+            for (int i = 0; i < activePlayers.Count; i++)
+            {
+                if (activePlayers[i] == declarerPlayerId)
+                    return i;
+            }
+
+            return 0;
         }
 
         private class AnalysisResult
