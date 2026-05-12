@@ -460,13 +460,6 @@ namespace GameOfCardsCsharp.Preferance.Trump
                        ?? ownInSuit[ownInSuit.Count - 1];
             }
 
-            // 2b) Void of lead suit.
-            if (partnerWinning)
-            {
-                // With full info, partner's win is final — don't waste a trump.
-                return BestDefenderDiscard(player, leadSuit)[0];
-            }
-
             if (HasTrump(player))
             {
                 // Declarer is winning.
