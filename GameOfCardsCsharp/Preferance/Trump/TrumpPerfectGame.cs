@@ -113,18 +113,86 @@ namespace GameOfCardsCsharp.Preferance.Trump
         }
 
         /// <summary>
-        /// Initial discard heuristic for the declarer when unable to follow suit:
-        /// returns the smallest available card from each of the other non-trump suits.
+        /// Discard heuristic for the declarer when unable to follow suit.
+        /// Returns all legal discard candidates (one per non-led, non-trump suit
+        /// where the declarer holds cards), sorted best-first by
+        /// <see cref="SuitDefenseOutcome.DiscardPriority"/> and then by longest
+        /// suit. The attacker is modeled as the next seat clockwise (a defender).
+        /// If the declarer has no non-trump cards outside the lead suit, falls
+        /// back to the smallest trump.
         /// </summary>
         public List<PerfectCardMove> BestDeclarerDiscard(int playerIndex, Suit leadSuit)
-            => SmallestCardsInOtherSuits(playerIndex, leadSuit);
+            => RankDiscards(playerIndex, leadSuit, attackerIndex: NextPlayer(playerIndex));
 
         /// <summary>
-        /// Initial discard heuristic for a defender when unable to follow suit:
-        /// returns the smallest available card from each of the other non-trump suits.
+        /// Discard heuristic for a defender when unable to follow suit.
+        /// Returns all legal discard candidates (one per non-led, non-trump suit
+        /// where the defender holds cards), sorted best-first by
+        /// <see cref="SuitDefenseOutcome.DiscardPriority"/> and then by longest
+        /// suit. The attacker is the declarer. If the defender has no non-trump
+        /// cards outside the lead suit, falls back to the smallest trump.
         /// </summary>
         public List<PerfectCardMove> BestDefenderDiscard(int playerIndex, Suit leadSuit)
-            => SmallestCardsInOtherSuits(playerIndex, leadSuit);
+            => RankDiscards(playerIndex, leadSuit, attackerIndex: _state.DeclarerIndex);
+
+        /// <summary>
+        /// Shared discard ranking used by both declarer and defender policies in
+        /// Trump. Considers only non-led, non-trump suits — discarding a trump
+        /// is treated as a forced last resort. Ranks each candidate via
+        /// <see cref="PerfPerfectGameState.AnalyzeSuitDiscard"/>, sorts by
+        /// <see cref="SuitDefenseOutcome.DiscardPriority"/> ascending and by
+        /// <see cref="SuitDiscardAnalysis.DefenderLength"/> descending.
+        ///
+        /// Note: the simulation primitive is purely suit-local and does not
+        /// model ruffing. That is acceptable here because we evaluate only
+        /// non-trump suits; trumps are handled by the fallback rule below.
+        /// </summary>
+        private List<PerfectCardMove> RankDiscards(
+            int holderIndex, Suit leadSuit, int attackerIndex)
+        {
+            // At most 2 non-led, non-trump suits to consider (3 non-led suits
+            // minus the trump suit, unless trump == leadSuit in which case 3).
+            var ranked = new List<SuitDiscardAnalysis>(capacity: 3);
+
+            for (int s = 0; s < _state.Moves.Count; s++)
+            {
+                if (s == (int)leadSuit)
+                {
+                    continue;
+                }
+                if (s == (int)_trumpSuit)
+                {
+                    continue;
+                }
+
+                var analysis = _state.AnalyzeSuitDiscard(
+                    (Suit)s, attackerIndex, holderIndex);
+
+                if (analysis.Candidate != null)
+                {
+                    ranked.Add(analysis);
+                }
+            }
+
+            if (ranked.Count > 0)
+            {
+                return ranked
+                    .OrderBy(a => a.DiscardCost.DiscardPriority)
+                    .ThenByDescending(a => a.DefenderLength)
+                    .Select(a => a.Candidate!)
+                    .ToList();
+            }
+
+            // Fallback: only trumps remain outside the lead suit.
+            var smallestTrump = SmallestInSuit(holderIndex, _trumpSuit);
+            if (smallestTrump != null)
+            {
+                return new List<PerfectCardMove> { smallestTrump };
+            }
+
+            throw new InvalidOperationException(
+                $"Player {holderIndex} has no cards to discard outside suit {leadSuit}.");
+        }
 
         /// <summary>
         /// Calculates the resulting <see cref="Score3"/> after playing
