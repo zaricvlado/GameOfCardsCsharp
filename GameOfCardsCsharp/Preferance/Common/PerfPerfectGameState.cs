@@ -1,6 +1,9 @@
 using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -1014,6 +1017,118 @@ namespace GameOfCardsCsharp.Preferance.Common
         /// defender side. <c>SureTricks</c> is attributed strictly to
         /// <paramref name="defenderIndex"/>.
         /// </summary>
+        // ============================================================
+        // Bitmask representation of a single suit's cards
+        // ------------------------------------------------------------
+        // suitMoves is sorted by rank DESCENDING, so for a Preferance
+        // suit the indices map to ranks like this:
+        //
+        //   index : 0  1  2  3  4   5  6  7
+        //   rank  : A  K  Q  J  10  9  8  7
+        //
+        // For each player we keep a uint where bit i is set iff that
+        // player currently still holds suitMoves[i]. Therefore:
+        //   - lowest set bit  (TrailingZeroCount)         = HIGHEST rank
+        //   - highest set bit (31 - LeadingZeroCount)     = LOWEST  rank
+        //   - "cards outranking suitMoves[leadIdx]"       = bits below leadIdx
+        //   - "play card i"                               = clear bit i
+        //   - "how many cards left"                       = PopCount
+        //
+        // The helper methods below give these bit operations readable
+        // names; they are aggressively inlined so there is no runtime
+        // cost vs. writing the bit-twiddling inline.
+        // ============================================================
+
+        /// <summary>Index of the player's highest-rank card in the suit (-1 if none).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int HighestIndex(uint cards)
+            => cards == 0 ? -1 : BitOperations.TrailingZeroCount(cards);
+
+        /// <summary>Index of the player's lowest-rank card in the suit (-1 if none).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int LowestIndex(uint cards)
+            => cards == 0 ? -1 : 31 - BitOperations.LeadingZeroCount(cards);
+
+        /// <summary>
+        /// Subset of <paramref name="cards"/> whose rank is strictly higher than
+        /// the card at <paramref name="leadIdx"/> (i.e. indices below it).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static uint HigherThan(uint cards, int leadIdx)
+            => cards & ((1u << leadIdx) - 1u);
+
+        /// <summary>Plays (removes) the card at <paramref name="idx"/> from the hand.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void Remove(ref uint cards, int idx)
+            => cards &= ~(1u << idx);
+
+        /// <summary>Number of cards remaining in the hand.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int Count(uint cards)
+            => BitOperations.PopCount(cards);
+
+        /// <summary>
+        /// Builds the per-player suit bitmasks used by <see cref="SimulateDefense3P"/>.
+        /// Only available cards are included; if <paramref name="excludeListIndex"/>
+        /// matches one of the defender's cards, that card is skipped (used to compute
+        /// the "without candidate" outcome).
+        /// </summary>
+        private static void InitializeAvailableCards(
+            List<PerfectCardMove> suitMoves,
+            int attackerIndex,
+            int defenderIndex,
+            int partnerIndex,
+            int excludeListIndex,
+            out uint attackerCards,
+            out uint defenderCards,
+            out uint partnerCards)
+        {
+            attackerCards = 0u;
+            defenderCards = 0u;
+            partnerCards = 0u;
+
+            int count = suitMoves.Count;
+            for (int i = 0; i < count; i++)
+            {
+                var m = suitMoves[i];
+                if (!m.Available)
+                {
+                    continue;
+                }
+
+                int pi = m.PlayerIndex;
+                uint bit = 1u << i;
+
+                if (pi == defenderIndex)
+                {
+                    if (m.ListIndex == excludeListIndex)
+                    {
+                        continue;
+                    }
+                    defenderCards |= bit;
+                }
+                else if (pi == attackerIndex)
+                {
+                    attackerCards |= bit;
+                }
+                else if (pi == partnerIndex)
+                {
+                    partnerCards |= bit;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 3-player simulation. Partner side is decided from
+        /// <see cref="DeclarerIndex"/>: when <paramref name="defenderIndex"/> is
+        /// the declarer the partner is on the attacker side, otherwise on the
+        /// defender side. <c>SureTricks</c> is attributed strictly to
+        /// <paramref name="defenderIndex"/>.
+        ///
+        /// Implementation uses per-player suit bitmasks (see the comment block
+        /// above <see cref="HighestIndex"/>). Reads almost like English once the
+        /// "lower index = higher rank" rule is internalized.
+        /// </summary>
         private SuitDefenseOutcome SimulateDefense3P(
             List<PerfectCardMove> suitMoves,
             int attackerIndex,
@@ -1021,66 +1136,44 @@ namespace GameOfCardsCsharp.Preferance.Common
             int partnerIndex,
             int excludeListIndex)
         {
-            // inPlay set: attacker + defender + partner cards; exclude candidate if owned by defender.
-            var inPlay = new bool[suitMoves.Count];
-            for (int i = 0; i < suitMoves.Count; i++)
-            {
-                var m = suitMoves[i];
-                if (!m.Available)
-                {
-                    continue;
-                }
-                if (m.ListIndex == excludeListIndex && m.PlayerIndex == defenderIndex)
-                {
-                    continue;
-                }
-                if (m.PlayerIndex == attackerIndex
-                    || m.PlayerIndex == defenderIndex
-                    || m.PlayerIndex == partnerIndex)
-                {
-                    inPlay[i] = true;
-                }
-            }
+            // attackerCards / defenderCards / partnerCards:
+            // bit i set => that player still holds suitMoves[i].
+            InitializeAvailableCards(
+                suitMoves,
+                attackerIndex, defenderIndex, partnerIndex,
+                excludeListIndex,
+                out uint attackerCards,
+                out uint defenderCards,
+                out uint partnerCards);
 
             bool partnerOnAttackerSide = defenderIndex == DeclarerIndex;
-
             int sureTricks = 0;
 
             if (!partnerOnAttackerSide)
             {
                 // ===== Case A: single attacker (declarer) leads; partner helps defenderA =====
-                while (true)
+                while (attackerCards != 0)
                 {
-                    int leadIdx = FindHighestCardIndex(suitMoves, inPlay, attackerIndex);
-                    if (leadIdx == -1)
+                    int leadIdx = HighestIndex(attackerCards);
+                    Remove(ref attackerCards, leadIdx);
+
+                    uint defenderHigherThanLead = HigherThan(defenderCards, leadIdx);
+                    if (defenderHigherThanLead != 0)
                     {
-                        break;
-                    }
+                        // DefenderA beats the lead with its smallest-such card.
+                        int defReplyIdx = LowestIndex(defenderHigherThanLead);
+                        Remove(ref defenderCards, defReplyIdx);
 
-                    int leadRank = (int)suitMoves[leadIdx].Card.Rank;
-                    inPlay[leadIdx] = false;
-
-                    int defReplyIdx = FindSmallestHigherCardIndex(
-                        suitMoves, inPlay, defenderIndex, leadRank);
-
-                    if (defReplyIdx != -1)
-                    {
-                        // DefenderA beats the lead. Partner plays its smallest (realistic, not tactical).
-                        inPlay[defReplyIdx] = false;
-                        int defReplyRank = (int)suitMoves[defReplyIdx].Card.Rank;
-
-                        int partSmallIdx = FindSmallestCardIndex(
-                            suitMoves, inPlay, partnerIndex);
-
-                        if (partSmallIdx != -1)
+                        // Partner plays its smallest (realistic, not tactical).
+                        int partnerSmallIdx = LowestIndex(partnerCards);
+                        if (partnerSmallIdx != -1)
                         {
-                            inPlay[partSmallIdx] = false;
-                            int partSmallRank = (int)suitMoves[partSmallIdx].Card.Rank;
-                            if (partSmallRank > defReplyRank)
-                            {
-                                // Partner accidentally wins -> defenderA gets NO credit.
-                            }
-                            else
+                            Remove(ref partnerCards, partnerSmallIdx);
+
+                            // Lower index = higher rank. Partner "accidentally wins"
+                            // only if its smallest still outranks defenderA's reply
+                            // (partnerSmallIdx < defReplyIdx). Otherwise defenderA wins.
+                            if (partnerSmallIdx >= defReplyIdx)
                             {
                                 sureTricks++;
                             }
@@ -1089,34 +1182,31 @@ namespace GameOfCardsCsharp.Preferance.Common
                         {
                             sureTricks++;
                         }
-
                         continue;
                     }
 
-                    // DefenderA cannot beat the lead -> plays smallest (if any).
-                    int defSmallIdx = FindSmallestCardIndex(
-                        suitMoves, inPlay, defenderIndex);
+                    // DefenderA cannot beat the lead -> discards smallest (if any).
+                    int defSmallIdx = LowestIndex(defenderCards);
                     if (defSmallIdx != -1)
                     {
-                        inPlay[defSmallIdx] = false;
+                        Remove(ref defenderCards, defSmallIdx);
                     }
 
-                    // Partner tries to rescue: smallest higher than lead.
-                    int partReplyIdx = FindSmallestHigherCardIndex(
-                        suitMoves, inPlay, partnerIndex, leadRank);
-                    if (partReplyIdx != -1)
+                    // Partner tries to rescue: smallest card outranking the lead.
+                    uint partnerHigherThanLead = HigherThan(partnerCards, leadIdx);
+                    if (partnerHigherThanLead != 0)
                     {
-                        // Partner wins -> sureTricks stays (credit not for defenderA).
-                        inPlay[partReplyIdx] = false;
+                        int partnerReplyIdx = LowestIndex(partnerHigherThanLead);
+                        Remove(ref partnerCards, partnerReplyIdx);
+                        // Partner wins the trick -> no credit for defenderA.
                     }
                     else
                     {
-                        // Partner plays smallest (declarer wins the trick).
-                        int partSmallIdx = FindSmallestCardIndex(
-                            suitMoves, inPlay, partnerIndex);
-                        if (partSmallIdx != -1)
+                        // Partner cannot rescue -> discards smallest (declarer wins).
+                        int partnerSmallIdx = LowestIndex(partnerCards);
+                        if (partnerSmallIdx != -1)
                         {
-                            inPlay[partSmallIdx] = false;
+                            Remove(ref partnerCards, partnerSmallIdx);
                         }
                     }
                 }
@@ -1124,71 +1214,61 @@ namespace GameOfCardsCsharp.Preferance.Common
             else
             {
                 // ===== Case B: two-defender attacking coalition leads; declarer is candidate-holder =====
-                while (true)
+                while (attackerCards != 0 || partnerCards != 0)
                 {
-                    int aHighIdx = FindHighestCardIndex(suitMoves, inPlay, attackerIndex);
-                    int pHighIdx = FindHighestCardIndex(suitMoves, inPlay, partnerIndex);
+                    int attackerHighIdx = HighestIndex(attackerCards);
+                    int partnerHighIdx = HighestIndex(partnerCards);
 
-                    if (aHighIdx == -1 && pHighIdx == -1)
-                    {
-                        break;
-                    }
-
+                    // Pick whichever side has the higher card to lead.
+                    // Lower index = higher rank; ties go to the attacker (matches
+                    // the original >= preference).
                     int leadIdx;
-                    int otherSidePlayer;
-                    if (pHighIdx == -1
-                        || (aHighIdx != -1
-                            && (int)suitMoves[aHighIdx].Card.Rank >= (int)suitMoves[pHighIdx].Card.Rank))
+                    if (partnerHighIdx == -1
+                        || (attackerHighIdx != -1 && attackerHighIdx <= partnerHighIdx))
                     {
-                        leadIdx = aHighIdx;
-                        otherSidePlayer = partnerIndex;
+                        leadIdx = attackerHighIdx;
+                        Remove(ref attackerCards, leadIdx);
+                        // Other side (partner) plays its smallest if any.
+                        int partnerSmallIdx = LowestIndex(partnerCards);
+                        if (partnerSmallIdx != -1)
+                        {
+                            Remove(ref partnerCards, partnerSmallIdx);
+                        }
                     }
                     else
                     {
-                        leadIdx = pHighIdx;
-                        otherSidePlayer = attackerIndex;
-                    }
-
-                    int leadRank = (int)suitMoves[leadIdx].Card.Rank;
-                    inPlay[leadIdx] = false;
-
-                    // Other side plays smallest if still has any.
-                    int otherSmallIdx = FindSmallestCardIndex(
-                        suitMoves, inPlay, otherSidePlayer);
-                    if (otherSmallIdx != -1)
-                    {
-                        inPlay[otherSmallIdx] = false;
+                        leadIdx = partnerHighIdx;
+                        Remove(ref partnerCards, leadIdx);
+                        // Other side (attacker) plays its smallest if any.
+                        int attackerSmallIdx = LowestIndex(attackerCards);
+                        if (attackerSmallIdx != -1)
+                        {
+                            Remove(ref attackerCards, attackerSmallIdx);
+                        }
                     }
 
                     // Declarer (candidate-holder) reply.
-                    int declReplyIdx = FindSmallestHigherCardIndex(
-                        suitMoves, inPlay, defenderIndex, leadRank);
-                    if (declReplyIdx != -1)
+                    uint declarerHigherThanLead = HigherThan(defenderCards, leadIdx);
+                    if (declarerHigherThanLead != 0)
                     {
+                        int declarerReplyIdx = LowestIndex(declarerHigherThanLead);
+                        Remove(ref defenderCards, declarerReplyIdx);
                         sureTricks++;
-                        inPlay[declReplyIdx] = false;
                     }
                     else
                     {
-                        int declSmallIdx = FindSmallestCardIndex(
-                            suitMoves, inPlay, defenderIndex);
-                        if (declSmallIdx != -1)
+                        int declarerSmallIdx = LowestIndex(defenderCards);
+                        if (declarerSmallIdx != -1)
                         {
-                            inPlay[declSmallIdx] = false;
+                            Remove(ref defenderCards, declarerSmallIdx);
                         }
-                        // Otherwise declarer void -> defenders win uncontested.
+                        // Otherwise declarer is void -> defenders win uncontested.
                     }
                 }
             }
 
-            int lengthTricks = 0;
-            for (int i = 0; i < suitMoves.Count; i++)
-            {
-                if (inPlay[i] && suitMoves[i].PlayerIndex == defenderIndex)
-                {
-                    lengthTricks++;
-                }
-            }
+            // Cards defenderA never had to play in this suit are potential length tricks.
+            int lengthTricks = Count(defenderCards);
 
             return new SuitDefenseOutcome(sureTricks, lengthTricks);
         }
