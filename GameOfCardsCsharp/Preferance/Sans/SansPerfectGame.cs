@@ -111,7 +111,10 @@ namespace GameOfCardsCsharp.Preferance.Sans
         /// suit. The attacker is modeled as the next seat clockwise (a defender).
         /// </summary>
         public List<PerfectCardMove> BestDeclarerDiscard(int playerIndex, Suit leadSuit)
-            => RankDiscards(playerIndex, leadSuit, attackerIndex: NextPlayer(playerIndex));
+            => RankDiscards(
+                holderIndex: playerIndex,
+                leadSuit: leadSuit,
+                attackerIndex: NextPlayer(playerIndex));
 
         /// <summary>
         /// Discard heuristic for a defender when unable to follow suit.
@@ -121,7 +124,10 @@ namespace GameOfCardsCsharp.Preferance.Sans
         /// suit. The attacker is the declarer.
         /// </summary>
         public List<PerfectCardMove> BestDefenderDiscard(int playerIndex, Suit leadSuit)
-            => RankDiscards(playerIndex, leadSuit, attackerIndex: _state.DeclarerIndex);
+            => RankDiscards(
+                holderIndex: playerIndex,
+                leadSuit: leadSuit,
+                attackerIndex: _state.DeclarerIndex);
 
         /// <summary>
         /// Shared discard ranking used by both declarer and defender policies.
@@ -134,7 +140,6 @@ namespace GameOfCardsCsharp.Preferance.Sans
         private List<PerfectCardMove> RankDiscards(
             int holderIndex, Suit leadSuit, int attackerIndex)
         {
-            // At most 3 non-led suits to consider.
             var ranked = new List<SuitDiscardAnalysis>(capacity: 3);
 
             for (int s = 0; s < _state.Moves.Count; s++)
@@ -144,7 +149,7 @@ namespace GameOfCardsCsharp.Preferance.Sans
                     continue;
                 }
 
-                var analysis = _state.AnalyzeSuitDiscard(
+                var analysis = _state.AnalyzeSuitDiscard3P(
                     (Suit)s, attackerIndex, holderIndex);
 
                 if (analysis.Candidate != null)
