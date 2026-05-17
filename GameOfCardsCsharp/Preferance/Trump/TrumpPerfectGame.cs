@@ -122,7 +122,10 @@ namespace GameOfCardsCsharp.Preferance.Trump
         /// back to the smallest trump.
         /// </summary>
         public List<PerfectCardMove> BestDeclarerDiscard(int playerIndex, Suit leadSuit)
-            => RankDiscards(playerIndex, leadSuit, attackerIndex: NextPlayer(playerIndex));
+            => RankDiscards(
+                holderIndex: playerIndex,
+                leadSuit: leadSuit,
+                attackerIndex: NextPlayer(playerIndex));
 
         /// <summary>
         /// Discard heuristic for a defender when unable to follow suit.
@@ -133,7 +136,10 @@ namespace GameOfCardsCsharp.Preferance.Trump
         /// cards outside the lead suit, falls back to the smallest trump.
         /// </summary>
         public List<PerfectCardMove> BestDefenderDiscard(int playerIndex, Suit leadSuit)
-            => RankDiscards(playerIndex, leadSuit, attackerIndex: _state.DeclarerIndex);
+            => RankDiscards(
+                holderIndex: playerIndex,
+                leadSuit: leadSuit,
+                attackerIndex: _state.DeclarerIndex);
 
         /// <summary>
         /// Shared discard ranking used by both declarer and defender policies in
@@ -150,8 +156,6 @@ namespace GameOfCardsCsharp.Preferance.Trump
         private List<PerfectCardMove> RankDiscards(
             int holderIndex, Suit leadSuit, int attackerIndex)
         {
-            // At most 2 non-led, non-trump suits to consider (3 non-led suits
-            // minus the trump suit, unless trump == leadSuit in which case 3).
             var ranked = new List<SuitDiscardAnalysis>(capacity: 3);
 
             for (int s = 0; s < _state.Moves.Count; s++)
@@ -165,7 +169,7 @@ namespace GameOfCardsCsharp.Preferance.Trump
                     continue;
                 }
 
-                var analysis = _state.AnalyzeSuitDiscard(
+                var analysis = _state.AnalyzeSuitDiscard3P(
                     (Suit)s, attackerIndex, holderIndex);
 
                 if (analysis.Candidate != null)
@@ -183,7 +187,6 @@ namespace GameOfCardsCsharp.Preferance.Trump
                     .ToList();
             }
 
-            // Fallback: only trumps remain outside the lead suit.
             var smallestTrump = SmallestInSuit(holderIndex, _trumpSuit);
             if (smallestTrump != null)
             {
