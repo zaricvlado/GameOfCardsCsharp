@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GameOfCardsCsharp
+namespace GameOfCardsCsharp.Tablic
 {
     /// <summary>
     /// Move validation result
@@ -256,7 +256,7 @@ namespace GameOfCardsCsharp
 
             // For small subsets (N <= 10), brute force with bitmask is efficient
             // For N=7: 2^7 = 128 subsets - very fast
-            for (int mask = 1; mask < (1 << n); mask++)
+            for (int mask = 1; mask < 1 << n; mask++)
             {
                 var subsetIndices = new List<int>();
                 var subsetValues = new List<int>();
@@ -264,7 +264,7 @@ namespace GameOfCardsCsharp
 
                 for (int i = 0; i < n; i++)
                 {
-                    if ((mask & (1 << i)) != 0)
+                    if ((mask & 1 << i) != 0)
                     {
                         subsetIndices.Add(originalIndices[i]);
                         subsetValues.Add(values[i]);

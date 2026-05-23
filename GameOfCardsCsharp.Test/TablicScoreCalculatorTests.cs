@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 using GameOfCardsCsharp;
+using GameOfCardsCsharp.Tablic;
 
 namespace GameOfCardsCsharp.Tests
 {

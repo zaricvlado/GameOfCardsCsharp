@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GameOfCardsCsharp
+namespace GameOfCardsCsharp.Tablic
 {
     /// <summary>
     /// Random strategy - picks moves randomly, but can still evaluate them

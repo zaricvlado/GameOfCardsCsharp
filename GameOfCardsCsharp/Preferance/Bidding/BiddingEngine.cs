@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GameOfCardsCsharp.Tablic;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 

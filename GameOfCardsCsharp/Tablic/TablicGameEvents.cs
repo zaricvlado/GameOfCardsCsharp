@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GameOfCardsCsharp
+namespace GameOfCardsCsharp.Tablic
 {
     public class GameStartedEventArgs
     {

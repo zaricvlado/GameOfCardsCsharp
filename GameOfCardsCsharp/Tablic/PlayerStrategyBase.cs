@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace GameOfCardsCsharp
+namespace GameOfCardsCsharp.Tablic
 {
     /// <summary>
     /// Base class for player strategies with default evaluation logic
@@ -41,7 +41,7 @@ namespace GameOfCardsCsharp
                     int cardCount = combo.Count;
                     
                     // Trick value is worth 10 points each, card count is worth 1 point each
-                    int comboScore = (trickValue * 10) + cardCount;
+                    int comboScore = trickValue * 10 + cardCount;
                     
                     bestComboScore = Math.Max(bestComboScore, comboScore);
                 }
