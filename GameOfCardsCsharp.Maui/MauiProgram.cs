@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using GameOfCardsCsharp.Maui.Services;
+using GameOfCardsCsharp.Tablic;
 
 namespace GameOfCardsCsharp.Maui
 {

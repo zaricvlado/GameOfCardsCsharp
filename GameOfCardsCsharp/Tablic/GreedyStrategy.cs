@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GameOfCardsCsharp
+namespace GameOfCardsCsharp.Tablic
 {
     /// <summary>
     /// Greedy strategy - always picks the best evaluated move
@@ -43,7 +43,7 @@ namespace GameOfCardsCsharp
                         {
                             int trickValue = combo.Sum(idx => rules.GetTrickValue(state.GetTalon()[idx]));
                             int cardCount = combo.Count;
-                            int comboScore = (trickValue * 10) + cardCount;
+                            int comboScore = trickValue * 10 + cardCount;
 
                             if (comboScore > bestComboScore)
                             {
