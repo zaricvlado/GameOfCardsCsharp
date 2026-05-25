@@ -28,14 +28,21 @@ namespace GameOfCardsCsharp.Tablic
             var score1 = CalculatePlayerScore(player1);
             var score2 = CalculatePlayerScore(player2);
 
-            // Award bonus point for most cards (27+ cards in a 52-card deck)
-            if (player1.GetPileSize() > player2.GetPileSize())
+            // Award 3 bonus points for "most cards" — only granted when a player
+            // has captured 27 or more cards (a strict majority of the 52-card deck).
+            // A 26/26 split awards no bonus to either player.
+            const int MostCardsThreshold = 27;
+            const int MostCardsBonus = 3;
+
+            if (player1.GetPileSize() >= MostCardsThreshold &&
+                player1.GetPileSize() > player2.GetPileSize())
             {
-                score1.TotalPoints++;
+                score1.TotalPoints += MostCardsBonus;
             }
-            else if (player2.GetPileSize() > player1.GetPileSize())
+            else if (player2.GetPileSize() >= MostCardsThreshold &&
+                     player2.GetPileSize() > player1.GetPileSize())
             {
-                score2.TotalPoints++;
+                score2.TotalPoints += MostCardsBonus;
             }
 
             return (score1, score2);
